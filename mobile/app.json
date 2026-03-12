@@ -1,0 +1,48 @@
+{
+    "expo": {
+      "name": "Aurora Sentinel",
+      "slug": "aurora-sentinel-mobile",
+      "sdkVersion": "54.0.0",
+      "orientation": "portrait",
+      "icon": "./assets/icon.png",
+      "userInterfaceStyle": "dark",
+      "splash": {
+        "image": "./assets/splash.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#0f172a"
+      },
+  
+      "assetBundlePatterns": ["**/*"],
+  
+      "extra": {
+        "supabaseUrl": "https://uszrynkltqxddwiytbnp.supabase.co",
+        "supabaseAnonKey": "sb_publishable_qJZ4qrX1UyNZrI_lT5Pv9g_7isoMvd4",
+        "backendApiUrl": "http://192.168.0.102:3001/api",
+        "socketUrl": "ws://192.168.0.102:3001"
+      },
+  
+      "ios": {
+        "supportsTablet": true,
+        "bundleIdentifier": "com.aurorasentinel.app"
+      },
+  
+      "android": {
+        "adaptiveIcon": {
+          "foregroundImage": "./assets/adaptive-icon.png",
+          "backgroundColor": "#0f172a"
+        },
+        "package": "com.aurorasentinel.app",
+        "permissions": [
+          "RECORD_AUDIO",
+          "ACCESS_FINE_LOCATION",
+          "ACCESS_COARSE_LOCATION",
+          "CAMERA"
+        ]
+      },
+  
+      "web": {
+        "favicon": "./assets/favicon.png"
+      }
+    }
+  }
+  
