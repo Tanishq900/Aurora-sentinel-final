@@ -1,0 +1,272 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 222 47% 6%;
+    --foreground: 210 40% 98%;
+
+    --card: 222 47% 9%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222 47% 9%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 186 100% 50%;
+    --primary-foreground: 222 47% 6%;
+
+    --secondary: 222 47% 15%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 222 30% 18%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 186 100% 40%;
+    --accent-foreground: 222 47% 6%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 222 47% 6%;
+
+    --success: 142 71% 45%;
+    --success-foreground: 210 40% 98%;
+
+    --border: 222 30% 20%;
+    --input: 222 30% 20%;
+    --ring: 186 100% 50%;
+
+    --radius: 0.75rem;
+
+    /* Aurora theme specific */
+    --aurora-cyan: 186 100% 50%;
+    --aurora-teal: 172 100% 40%;
+    --aurora-blue: 220 100% 60%;
+    --aurora-green: 160 100% 45%;
+    
+    --glass-bg: 222 47% 11%;
+    --glass-border: 186 50% 30%;
+    --glow-cyan: 186 100% 50%;
+    --glow-red: 0 84% 60%;
+    --glow-amber: 38 92% 50%;
+
+    --sidebar-background: 222 47% 8%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 186 100% 50%;
+    --sidebar-primary-foreground: 222 47% 6%;
+    --sidebar-accent: 222 30% 18%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 222 30% 20%;
+    --sidebar-ring: 186 100% 50%;
+  }
+
+  .dark {
+    --background: 222 47% 6%;
+    --foreground: 210 40% 98%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    background: linear-gradient(135deg, 
+      hsl(222, 47%, 6%) 0%, 
+      hsl(222, 47%, 8%) 50%, 
+      hsl(222, 47%, 6%) 100%);
+    min-height: 100vh;
+  }
+}
+
+@layer components {
+  /* Glassmorphism panels */
+  .glass-panel {
+    @apply bg-card/60 backdrop-blur-xl border border-border/50 rounded-xl;
+    box-shadow: 
+      0 8px 32px -8px rgba(0, 0, 0, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+
+  .glass-panel-glow {
+    @apply glass-panel;
+    box-shadow: 
+      0 8px 32px -8px rgba(0, 0, 0, 0.4),
+      0 0 40px -20px hsl(var(--aurora-cyan) / 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+
+  .glass-panel-critical {
+    @apply glass-panel;
+    box-shadow: 
+      0 8px 32px -8px rgba(0, 0, 0, 0.4),
+      0 0 30px -10px hsl(var(--destructive) / 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    border-color: hsl(var(--destructive) / 0.4);
+  }
+
+  .glass-panel-warning {
+    @apply glass-panel;
+    box-shadow: 
+      0 8px 32px -8px rgba(0, 0, 0, 0.4),
+      0 0 30px -10px hsl(var(--warning) / 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    border-color: hsl(var(--warning) / 0.4);
+  }
+
+  /* Aurora gradient text */
+  .aurora-text {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(
+      135deg,
+      hsl(var(--aurora-cyan)) 0%,
+      hsl(var(--aurora-teal)) 50%,
+      hsl(var(--aurora-green)) 100%
+    );
+  }
+
+  /* Pulsing animation for alerts */
+  .pulse-critical {
+    animation: pulse-critical 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  .pulse-warning {
+    animation: pulse-warning 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  .pulse-marker {
+    animation: pulse-marker 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  /* Status badges */
+  .badge-critical {
+    @apply bg-destructive/20 text-destructive border border-destructive/30;
+    box-shadow: 0 0 12px -3px hsl(var(--destructive) / 0.5);
+  }
+
+  .badge-warning {
+    @apply bg-warning/20 border border-warning/30;
+    color: hsl(var(--warning));
+    box-shadow: 0 0 12px -3px hsl(var(--warning) / 0.5);
+  }
+
+  .badge-success {
+    @apply bg-success/20 border border-success/30;
+    color: hsl(var(--success));
+    box-shadow: 0 0 12px -3px hsl(var(--success) / 0.5);
+  }
+
+  .badge-info {
+    @apply bg-primary/20 text-primary border border-primary/30;
+    box-shadow: 0 0 12px -3px hsl(var(--primary) / 0.5);
+  }
+
+  /* Aurora background effect */
+  .aurora-bg {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: -1;
+  }
+
+  .aurora-bg::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(
+      ellipse at 30% 20%,
+      hsl(var(--aurora-cyan) / 0.08) 0%,
+      transparent 50%
+    ),
+    radial-gradient(
+      ellipse at 70% 60%,
+      hsl(var(--aurora-teal) / 0.05) 0%,
+      transparent 40%
+    );
+    animation: aurora-drift 20s ease-in-out infinite alternate;
+  }
+
+  /* Map styles */
+  .map-container {
+    @apply glass-panel-glow relative overflow-hidden;
+    background: 
+      radial-gradient(circle at 30% 40%, hsl(var(--aurora-cyan) / 0.05) 0%, transparent 50%),
+      radial-gradient(circle at 70% 60%, hsl(var(--aurora-teal) / 0.03) 0%, transparent 50%),
+      hsl(var(--card) / 0.8);
+  }
+
+  .map-grid {
+    background-image: 
+      linear-gradient(hsl(var(--border) / 0.3) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--border) / 0.3) 1px, transparent 1px);
+    background-size: 50px 50px;
+  }
+}
+
+@layer utilities {
+  /* Glow effects */
+  .glow-cyan {
+    box-shadow: 0 0 20px -5px hsl(var(--aurora-cyan) / 0.5);
+  }
+
+  .glow-red {
+    box-shadow: 0 0 20px -5px hsl(var(--destructive) / 0.5);
+  }
+
+  .glow-amber {
+    box-shadow: 0 0 20px -5px hsl(var(--warning) / 0.5);
+  }
+}
+
+@keyframes pulse-critical {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 20px -5px hsl(var(--destructive) / 0.6);
+  }
+  50% {
+    opacity: 0.85;
+    box-shadow: 0 0 30px -5px hsl(var(--destructive) / 0.8);
+  }
+}
+
+@keyframes pulse-warning {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 20px -5px hsl(var(--warning) / 0.6);
+  }
+  50% {
+    opacity: 0.85;
+    box-shadow: 0 0 30px -5px hsl(var(--warning) / 0.8);
+  }
+}
+
+@keyframes pulse-marker {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.7;
+  }
+}
+
+@keyframes aurora-drift {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  100% {
+    transform: translate(5%, 5%) rotate(5deg);
+  }
+}
