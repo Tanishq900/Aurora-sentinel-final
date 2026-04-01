@@ -37,54 +37,55 @@ function formatLastSeen(value: string | null): string {
 }
 
 function HeartbeatWave({ alive, lineId }: { alive: boolean; lineId: string }) {
-  const lineColor = alive ? '#6bc7ff' : '#4d2c7f';
-  const glowColor = alive ? 'rgba(107, 199, 255, 0.95)' : 'rgba(77, 44, 127, 0.72)';
-  const backgroundColor = alive ? 'rgba(22, 34, 54, 0.88)' : 'rgba(34, 21, 43, 0.92)';
+  const lineColor = alive ? '#88ddff' : '#4f2d82';
+  const coreColor = alive ? '#dff8ff' : '#7a4bb2';
   const points = alive
-    ? '0,44 18,44 24,44 28,28 34,44 48,44 54,18 62,70 74,44 98,44 106,44 110,36 118,44 136,44 146,14 156,72 170,44 188,44 194,30 202,44 220,44 232,44 238,22 246,44 258,44 264,32 272,44 300,44'
-    : '0,44 300,44';
+    ? '0,44 26,44 34,44 40,24 48,52 62,44 88,44 96,44 104,38 112,44 136,44 148,12 160,74 172,44 196,44 202,28 210,44 238,44 246,44 252,18 262,44 276,44 284,34 292,44 320,44'
+    : '0,44 320,44';
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-white/8" style={{ background: backgroundColor }}>
-      <svg
-        viewBox="0 0 300 88"
-        className="h-24 w-full"
-        preserveAspectRatio="none"
-        role="img"
-        aria-label={alive ? 'Alive heartbeat line' : 'Dead heartbeat line'}
-      >
+    <div
+      className={`relative overflow-hidden rounded-2xl border ${
+        alive ? 'border-sky-300/15 bg-[#071524]' : 'border-violet-500/10 bg-[#130d1f]'
+      }`}
+    >
+      <div
+        className={`pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 blur-2xl ${
+          alive ? 'bg-sky-300/25' : 'bg-violet-500/10'
+        }`}
+        style={alive ? { animation: 'aurora-heartbeat-sweep 3.8s linear infinite' } : undefined}
+      />
+      <svg viewBox="0 0 320 88" className="h-24 w-full" preserveAspectRatio="none" role="img">
         <defs>
-          <filter id={`${lineId}-glow`} x="-40%" y="-100%" width="180%" height="300%">
-            <feGaussianBlur stdDeviation="3.4" result="blur" />
+          <filter id={`${lineId}-glow`} x="-40%" y="-160%" width="220%" height="420%">
+            <feGaussianBlur stdDeviation={alive ? '4.4' : '2.2'} result="blur" />
             <feColorMatrix
               in="blur"
               type="matrix"
               values="1 0 0 0 0
                       0 1 0 0 0
                       0 0 1 0 0
-                      0 0 0 18 -8"
+                      0 0 0 20 -9"
             />
           </filter>
           <linearGradient id={`${lineId}-gradient`} x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor={lineColor} stopOpacity="0.72" />
-            <stop offset="50%" stopColor={alive ? '#d8f6ff' : '#7d4bb8'} stopOpacity="1" />
-            <stop offset="100%" stopColor={lineColor} stopOpacity="0.72" />
+            <stop offset="0%" stopColor={lineColor} stopOpacity="0.55" />
+            <stop offset="48%" stopColor={coreColor} stopOpacity="1" />
+            <stop offset="100%" stopColor={lineColor} stopOpacity="0.55" />
           </linearGradient>
         </defs>
 
         <polyline
           points={points}
           fill="none"
-          stroke={glowColor}
-          strokeWidth="4"
+          stroke={alive ? 'rgba(136, 221, 255, 0.95)' : 'rgba(79, 45, 130, 0.9)'}
+          strokeWidth={alive ? '4.2' : '3'}
           strokeLinecap="round"
           strokeLinejoin="round"
           filter={`url(#${lineId}-glow)`}
-          opacity={alive ? 0.95 : 0.78}
+          opacity={alive ? 0.95 : 0.82}
         >
-          {alive ? (
-            <animate attributeName="opacity" values="0.7;1;0.7" dur="3.6s" repeatCount="indefinite" />
-          ) : null}
+          {alive ? <animate attributeName="opacity" values="0.72;1;0.72" dur="2.6s" repeatCount="indefinite" /> : null}
         </polyline>
 
         <polyline
@@ -94,16 +95,96 @@ function HeartbeatWave({ alive, lineId }: { alive: boolean; lineId: string }) {
           strokeWidth="2.2"
           strokeLinecap="round"
           strokeLinejoin="round"
-          strokeDasharray={alive ? '210 70' : undefined}
-        >
-          {alive ? (
-            <>
-              <animate attributeName="stroke-dashoffset" values="0;-280" dur="5.2s" repeatCount="indefinite" />
-              <animate attributeName="stroke-width" values="2;2.5;2" dur="3.6s" repeatCount="indefinite" />
-            </>
-          ) : null}
-        </polyline>
+        />
+
+        {alive ? (
+          <circle r="4.4" fill="#dff8ff" filter={`url(#${lineId}-glow)`}>
+            <animateMotion dur="3.8s" repeatCount="indefinite" rotate="auto">
+              <mpath href={`#${lineId}-path`} />
+            </animateMotion>
+          </circle>
+        ) : null}
+
+        <path id={`${lineId}-path`} d={alive ? 'M0,44 L26,44 L34,44 L40,24 L48,52 L62,44 L88,44 L96,44 L104,38 L112,44 L136,44 L148,12 L160,74 L172,44 L196,44 L202,28 L210,44 L238,44 L246,44 L252,18 L262,44 L276,44 L284,34 L292,44 L320,44' : 'M0,44 L320,44'} fill="none" stroke="transparent" />
       </svg>
+      <style>{`
+        @keyframes aurora-heartbeat-sweep {
+          0% { transform: translateX(0); opacity: 0; }
+          12% { opacity: 1; }
+          88% { opacity: 1; }
+          100% { transform: translateX(520%); opacity: 0; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+function AlertList({
+  title,
+  alerts,
+  emptyText,
+  getAlertLabel,
+  getRiskColor,
+  getRiskBadge,
+  formatTriggerType,
+}: {
+  title: string;
+  alerts: SOSEvent[];
+  emptyText: string;
+  getAlertLabel: (alert: SOSEvent) => string;
+  getRiskColor: (risk: number) => string;
+  getRiskBadge: (risk: number) => string;
+  formatTriggerType: (triggerType: SOSEvent['trigger_type']) => string;
+}) {
+  return (
+    <div className="rounded-2xl border border-border/40 bg-black/25 p-4">
+      <div className="mb-3 text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">{title}</div>
+      {alerts.length === 0 ? (
+        <div className="py-6 text-center text-sm text-muted-foreground">{emptyText}</div>
+      ) : (
+        <div className="space-y-3">
+          {alerts.map((alert) => (
+            <Link
+              key={alert.id}
+              to={`/security/alert/${alert.id}`}
+              className="block rounded-lg border border-border/60 bg-black/40 p-4 shadow-[0_10px_30px_rgba(0,0,0,0.35)] transition-colors hover:bg-black/55"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  <div className="mb-2 flex items-center gap-3">
+                    <span className={`text-2xl font-bold ${getRiskColor(alert.risk_score)}`}>{alert.risk_score.toFixed(1)}</span>
+                    <span
+                      className={`rounded px-3 py-1 text-xs font-semibold ${
+                        alert.risk_score >= 50
+                          ? 'bg-danger/20 text-danger'
+                          : alert.risk_score >= 25
+                            ? 'bg-warning/20 text-warning'
+                            : 'bg-safe/20 text-safe'
+                      }`}
+                    >
+                      {getRiskBadge(alert.risk_score)}
+                    </span>
+                    <span className="text-sm text-muted-foreground">{formatTriggerType(alert.trigger_type)}</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">{new Date(alert.created_at).toLocaleString()}</p>
+                  <p className="text-sm text-muted-foreground">User: {getAlertLabel(alert)}</p>
+                </div>
+                <span
+                  className={`rounded px-3 py-1 text-xs font-semibold ${
+                    alert.status === 'resolved'
+                      ? 'bg-safe/20 text-safe'
+                      : alert.status === 'acknowledged'
+                        ? 'bg-warning/20 text-warning'
+                        : 'bg-danger/20 text-danger'
+                  }`}
+                >
+                  {alert.status.toUpperCase()}
+                </span>
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -126,14 +207,14 @@ function BeaconStatusModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[99999] bg-black/78 backdrop-blur-md">
+    <div className="fixed inset-0 z-[99999] bg-black/80 backdrop-blur-md">
       <div className="mx-auto flex min-h-screen max-w-7xl items-center justify-center px-4 py-8">
         <div className="glass-panel w-full border border-border/60 bg-black/90 p-6 shadow-[0_30px_120px_rgba(0,0,0,0.65)]">
           <div className="mb-6 flex items-start justify-between gap-4 border-b border-border/40 pb-4">
             <div>
-              <h2 className="text-2xl font-semibold text-foreground">Beacon Status</h2>
+              <h2 className="text-2xl font-semibold text-foreground">Beacon Status Monitor</h2>
               <p className="text-sm text-muted-foreground">
-                Smooth live heartbeat view. Blue means alive, deep purple means dead.
+                Live hospital-style heartbeat lines. Blue moves while active, deep purple stays silent when dead.
               </p>
             </div>
             <div className="flex items-center gap-3">
@@ -168,7 +249,7 @@ function BeaconStatusModal({
                 return (
                   <div
                     key={beacon.id}
-                    className="rounded-3xl border border-border/60 bg-[radial-gradient(circle_at_top,rgba(29,41,64,0.35),rgba(0,0,0,0.72))] p-5 shadow-[0_18px_50px_rgba(0,0,0,0.4)]"
+                    className="rounded-3xl border border-border/60 bg-[radial-gradient(circle_at_top,rgba(22,42,63,0.3),rgba(0,0,0,0.78))] p-5 shadow-[0_18px_50px_rgba(0,0,0,0.4)]"
                   >
                     <div className="mb-4 flex items-start justify-between gap-4">
                       <div>
@@ -248,6 +329,9 @@ export default function SecurityDashboard() {
     [beacons]
   );
 
+  const sosAlerts = useMemo(() => alerts.filter((alert) => alert.trigger_type !== 'beacon'), [alerts]);
+  const beaconAlerts = useMemo(() => alerts.filter((alert) => alert.trigger_type === 'beacon'), [alerts]);
+
   const getAlertLabel = (alert: SOSEvent) => {
     if ((alert as any).source === 'beacon' || (alert as any).beacon_name || (alert as any).beacon_id) {
       return (alert as any).beacon_name || 'Beacon';
@@ -277,9 +361,7 @@ export default function SecurityDashboard() {
   const upsertBeacon = (incoming: BeaconStatus) => {
     setBeacons((prev) => {
       const idx = prev.findIndex((beacon) => beacon.id === incoming.id);
-      if (idx === -1) {
-        return [...prev, incoming];
-      }
+      if (idx === -1) return [...prev, incoming];
 
       const next = prev.slice();
       next[idx] = { ...prev[idx], ...incoming };
@@ -310,36 +392,24 @@ export default function SecurityDashboard() {
     }
   };
 
-  const openBeaconStatus = async () => {
-    setShowBeaconStatus(true);
+  const manualCheckBeacon = async () => {
     await loadBeacons();
+    setShowBeaconStatus(true);
   };
 
   const playNotification = () => {
     const base = (import.meta as any)?.env?.BASE_URL || '/';
     const prefix = base.endsWith('/') ? base : `${base}/`;
-    const candidates = [
-      `${prefix}security-alert.mp3`,
-      `${prefix}security-alert.wav`,
-      `${prefix}security-alert.ogg`,
-      `${prefix}no-test.mp3`,
-    ];
+    const candidates = [`${prefix}security-alert.mp3`, `${prefix}security-alert.wav`, `${prefix}security-alert.ogg`, `${prefix}no-test.mp3`];
 
     const tryPlay = (index: number) => {
       if (index >= candidates.length) {
-        const fallback = new Audio(
-          'data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBTGH0fPTgjMGHm7A7+OZURAJR6Tg8sBtJAU0h9Hz04IzBh5uwO/jmVEQCUek4PLAbSQFNIbR89OCMwYebsDv45lREAlHpODywG0kBTSG0fPTgjMGHm7A7+OZURAJR6Tg8sBtJAU0htHz04IzBh5uwO/jmVEQCUek4PLAbSQFNIbR89OCMwYebsDv45lREAlHpODywG0kBTQ='
-        );
-        fallback.volume = 0.5;
-        fallback.play().catch(() => {});
         return;
       }
 
       const audio = new Audio(candidates[index]);
       audio.volume = 0.6;
-      audio.play().catch(() => {
-        tryPlay(index + 1);
-      });
+      audio.play().catch(() => tryPlay(index + 1));
       audio.onerror = () => tryPlay(index + 1);
     };
 
@@ -356,9 +426,7 @@ export default function SecurityDashboard() {
     loadBeacons();
 
     const token = localStorage.getItem('accessToken');
-    if (!token) {
-      return;
-    }
+    if (!token) return;
 
     const socket = connectSocket(token);
 
@@ -391,19 +459,6 @@ export default function SecurityDashboard() {
     socket.on('sos-updated', upsertAlert);
     socket.on('beacon:heartbeat', (status: BeaconStatus) => upsertBeacon(status));
     socket.on('beacon:status', (status: BeaconStatus) => upsertBeacon(status));
-    socket.on('sos_status_update', (event: SOSEvent) => {
-      setAlerts((prev) =>
-        prev.map((alert) =>
-          alert.id === event.id
-            ? ({
-                ...alert,
-                ...event,
-                email: (event as any).email || (alert as any).email,
-              } as any)
-            : alert
-        )
-      );
-    });
 
     return () => {
       socket.off('new_sos_alert');
@@ -449,15 +504,6 @@ export default function SecurityDashboard() {
 
   const confirmService = emergencyConfirm ? emergencyConfig[emergencyConfirm] : null;
 
-  const handleConfirmEmergency = () => {
-    if (!confirmService) return;
-    try {
-      window.location.href = `tel:${confirmService.tel}`;
-    } finally {
-      setEmergencyConfirm(null);
-    }
-  };
-
   return (
     <div className="relative min-h-screen bg-black p-6">
       <div className="aurora-bg" />
@@ -468,22 +514,13 @@ export default function SecurityDashboard() {
             <p className="text-sm text-muted-foreground">Welcome, {user?.name || user?.email}</p>
           </div>
           <div className="flex gap-4">
-            <Link
-              to="/security/analytics"
-              className="rounded-lg border border-border/50 bg-secondary/60 px-4 py-2 text-foreground transition-colors hover:bg-secondary/80"
-            >
+            <Link to="/security/analytics" className="rounded-lg border border-border/50 bg-secondary/60 px-4 py-2 text-foreground transition-colors hover:bg-secondary/80">
               Analytics
             </Link>
-            <Link
-              to="/security/history"
-              className="rounded-lg border border-border/50 bg-secondary/60 px-4 py-2 text-foreground transition-colors hover:bg-secondary/80"
-            >
+            <Link to="/security/history" className="rounded-lg border border-border/50 bg-secondary/60 px-4 py-2 text-foreground transition-colors hover:bg-secondary/80">
               History
             </Link>
-            <button
-              onClick={logout}
-              className="rounded-lg border border-border/50 bg-secondary/60 px-4 py-2 text-foreground transition-colors hover:bg-secondary/80"
-            >
+            <button onClick={logout} className="rounded-lg border border-border/50 bg-secondary/60 px-4 py-2 text-foreground transition-colors hover:bg-secondary/80">
               Logout
             </button>
           </div>
@@ -498,27 +535,15 @@ export default function SecurityDashboard() {
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <button
-              type="button"
-              onClick={() => setEmergencyConfirm('fire')}
-              className={`flex items-center justify-center gap-2 rounded-xl px-5 py-4 font-semibold transition-colors ${emergencyConfig.fire.buttonClass}`}
-            >
+            <button type="button" onClick={() => setEmergencyConfirm('fire')} className={`flex items-center justify-center gap-2 rounded-xl px-5 py-4 font-semibold transition-colors ${emergencyConfig.fire.buttonClass}`}>
               {emergencyConfig.fire.icon}
               {emergencyConfig.fire.label}
             </button>
-            <button
-              type="button"
-              onClick={() => setEmergencyConfirm('ambulance')}
-              className={`flex items-center justify-center gap-2 rounded-xl px-5 py-4 font-semibold transition-colors ${emergencyConfig.ambulance.buttonClass}`}
-            >
+            <button type="button" onClick={() => setEmergencyConfirm('ambulance')} className={`flex items-center justify-center gap-2 rounded-xl px-5 py-4 font-semibold transition-colors ${emergencyConfig.ambulance.buttonClass}`}>
               {emergencyConfig.ambulance.icon}
               {emergencyConfig.ambulance.label}
             </button>
-            <button
-              type="button"
-              onClick={() => setEmergencyConfirm('police')}
-              className={`flex items-center justify-center gap-2 rounded-xl px-5 py-4 font-semibold transition-colors ${emergencyConfig.police.buttonClass}`}
-            >
+            <button type="button" onClick={() => setEmergencyConfirm('police')} className={`flex items-center justify-center gap-2 rounded-xl px-5 py-4 font-semibold transition-colors ${emergencyConfig.police.buttonClass}`}>
               {emergencyConfig.police.icon}
               {emergencyConfig.police.label}
             </button>
@@ -530,12 +555,7 @@ export default function SecurityDashboard() {
           <AuroraMap
             sosMarkers={alerts
               .filter((alert) => typeof alert.location?.lat === 'number' && typeof alert.location?.lng === 'number')
-              .map((alert) => ({
-                id: alert.id,
-                lat: alert.location!.lat!,
-                lng: alert.location!.lng!,
-                riskScore: alert.risk_score,
-              }))}
+              .map((alert) => ({ id: alert.id, lat: alert.location!.lat!, lng: alert.location!.lng!, riskScore: alert.risk_score }))}
             height="400px"
           />
         </div>
@@ -548,59 +568,26 @@ export default function SecurityDashboard() {
 
             {isLoading ? (
               <div className="py-8 text-center text-muted-foreground">Loading alerts...</div>
-            ) : alerts.length === 0 ? (
-              <div className="py-8 text-center text-muted-foreground">No active alerts</div>
             ) : (
               <div className="max-h-[720px] space-y-4 overflow-y-auto pr-1">
-                {alerts.map((alert) => (
-                  <Link
-                    key={alert.id}
-                    to={`/security/alert/${alert.id}`}
-                    className="block rounded-lg border border-border/60 bg-black/40 p-4 shadow-[0_10px_30px_rgba(0,0,0,0.35)] transition-colors hover:bg-black/55"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="mb-2 flex items-center gap-3">
-                          <span className={`text-2xl font-bold ${getRiskColor(alert.risk_score)}`}>
-                            {alert.risk_score.toFixed(1)}
-                          </span>
-                          <span
-                            className={`rounded px-3 py-1 text-xs font-semibold ${
-                              alert.risk_score >= 50
-                                ? 'bg-danger/20 text-danger'
-                                : alert.risk_score >= 25
-                                  ? 'bg-warning/20 text-warning'
-                                  : 'bg-safe/20 text-safe'
-                            }`}
-                          >
-                            {getRiskBadge(alert.risk_score)}
-                          </span>
-                          {Array.isArray((alert as any).attachments) && (alert as any).attachments.length > 0 ? (
-                            <span className="rounded border border-aurora-cyan/30 bg-aurora-cyan/15 px-2 py-1 text-xs font-semibold text-aurora-cyan">
-                              MEDIA
-                            </span>
-                          ) : null}
-                          <span className="text-sm text-muted-foreground">{formatTriggerType(alert.trigger_type)}</span>
-                        </div>
-                        <p className="text-sm text-muted-foreground">{new Date(alert.created_at).toLocaleString()}</p>
-                        <p className="text-sm text-muted-foreground">User: {getAlertLabel(alert)}</p>
-                      </div>
-                      <div className="text-right">
-                        <span
-                          className={`rounded px-3 py-1 text-xs font-semibold ${
-                            alert.status === 'resolved'
-                              ? 'bg-safe/20 text-safe'
-                              : alert.status === 'acknowledged'
-                                ? 'bg-warning/20 text-warning'
-                                : 'bg-danger/20 text-danger'
-                          }`}
-                        >
-                          {alert.status.toUpperCase()}
-                        </span>
-                      </div>
-                    </div>
-                  </Link>
-                ))}
+                <AlertList
+                  title="SOS Alerts"
+                  alerts={sosAlerts}
+                  emptyText="No active SOS alerts"
+                  getAlertLabel={getAlertLabel}
+                  getRiskColor={getRiskColor}
+                  getRiskBadge={getRiskBadge}
+                  formatTriggerType={formatTriggerType}
+                />
+                <AlertList
+                  title="Beacon Alerts"
+                  alerts={beaconAlerts}
+                  emptyText="No active beacon alerts"
+                  getAlertLabel={getAlertLabel}
+                  getRiskColor={getRiskColor}
+                  getRiskBadge={getRiskBadge}
+                  formatTriggerType={formatTriggerType}
+                />
               </div>
             )}
           </div>
@@ -609,16 +596,10 @@ export default function SecurityDashboard() {
             <div className="mb-4 flex items-center justify-between gap-4 border-b border-border/40 pb-3">
               <h2 className="text-xl font-semibold text-foreground">Beacons</h2>
               <div className="flex items-center gap-3">
-                <button
-                  onClick={loadBeacons}
-                  className="rounded-lg border border-border/50 bg-secondary/60 px-4 py-2 text-foreground transition-colors hover:bg-secondary/80"
-                >
+                <button onClick={loadBeacons} className="rounded-lg border border-border/50 bg-secondary/60 px-4 py-2 text-foreground transition-colors hover:bg-secondary/80">
                   Refresh
                 </button>
-                <button
-                  onClick={openBeaconStatus}
-                  className="rounded-lg border border-sky-400/25 bg-sky-400/10 px-4 py-2 text-sky-300 transition-colors hover:bg-sky-400/15"
-                >
+                <button onClick={() => setShowBeaconStatus(true)} className="rounded-lg border border-sky-400/25 bg-sky-400/10 px-4 py-2 text-sky-300 transition-colors hover:bg-sky-400/15">
                   Status
                 </button>
               </div>
@@ -634,22 +615,13 @@ export default function SecurityDashboard() {
                   const alive = isBeaconAlive(beacon, now);
 
                   return (
-                    <div
-                      key={beacon.id}
-                      className="rounded-2xl border border-border/60 bg-black/40 p-4 shadow-[0_10px_30px_rgba(0,0,0,0.35)]"
-                    >
+                    <div key={beacon.id} className="rounded-2xl border border-border/60 bg-black/40 p-4 shadow-[0_10px_30px_rgba(0,0,0,0.35)]">
                       <div className="mb-4 flex items-start justify-between gap-4">
                         <div>
                           <div className="text-lg font-semibold text-foreground">{beacon.name}</div>
                           <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">{beacon.node_role}</div>
                         </div>
-                        <div
-                          className={`rounded-full border px-3 py-2 text-xs font-semibold ${
-                            alive
-                              ? 'border-sky-400/30 bg-sky-400/10 text-sky-300'
-                              : 'border-violet-500/30 bg-violet-500/10 text-violet-300'
-                          }`}
-                        >
+                        <div className={`rounded-full border px-3 py-2 text-xs font-semibold ${alive ? 'border-sky-400/30 bg-sky-400/10 text-sky-300' : 'border-violet-500/30 bg-violet-500/10 text-violet-300'}`}>
                           {alive ? 'Alive' : 'Dead'}
                         </div>
                       </div>
@@ -676,19 +648,27 @@ export default function SecurityDashboard() {
                             <Thermometer className="h-4 w-4" />
                             Temperature
                           </div>
-                          <div className="mt-1 text-foreground">
-                            {typeof beacon.last_temperature_c === 'number' ? `${beacon.last_temperature_c.toFixed(1)} C` : 'N/A'}
-                          </div>
+                          <div className="mt-1 text-foreground">{typeof beacon.last_temperature_c === 'number' ? `${beacon.last_temperature_c.toFixed(1)} C` : 'N/A'}</div>
                         </div>
                         <div className="rounded-lg border border-border/40 bg-secondary/20 p-3">
                           <div className="flex items-center gap-2 text-muted-foreground">
                             <Wind className="h-4 w-4" />
                             Smoke
                           </div>
-                          <div className="mt-1 text-foreground">
-                            {typeof beacon.last_smoke_level === 'number' ? beacon.last_smoke_level.toFixed(0) : 'N/A'}
-                          </div>
+                          <div className="mt-1 text-foreground">{typeof beacon.last_smoke_level === 'number' ? beacon.last_smoke_level.toFixed(0) : 'N/A'}</div>
                         </div>
+                      </div>
+
+                      <div className="mt-4 flex items-center justify-between gap-3">
+                        <span className="text-xs text-muted-foreground">{beacon.location?.address || beacon.location?.building || beacon.id}</span>
+                        <button
+                          type="button"
+                          onClick={manualCheckBeacon}
+                          className="inline-flex items-center gap-2 rounded-full border border-sky-400/25 bg-sky-400/10 px-3 py-2 text-xs text-sky-300 transition-colors hover:bg-sky-400/15"
+                        >
+                          <HeartPulse className="h-4 w-4" />
+                          Manual Check
+                        </button>
                       </div>
                     </div>
                   );
@@ -716,11 +696,7 @@ export default function SecurityDashboard() {
                 <div className="text-lg font-semibold text-foreground">Confirm Call</div>
                 <div className="text-sm text-muted-foreground">{confirmService.label}</div>
               </div>
-              <button
-                type="button"
-                onClick={() => setEmergencyConfirm(null)}
-                className="rounded-lg border border-border/50 bg-secondary/60 px-3 py-2 text-foreground hover:bg-secondary/80"
-              >
+              <button type="button" onClick={() => setEmergencyConfirm(null)} className="rounded-lg border border-border/50 bg-secondary/60 px-3 py-2 text-foreground hover:bg-secondary/80">
                 Close
               </button>
             </div>
@@ -731,18 +707,10 @@ export default function SecurityDashboard() {
             </div>
 
             <div className="mt-5 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setEmergencyConfirm(null)}
-                className="rounded-lg border border-border/50 bg-secondary/60 px-5 py-2 text-foreground hover:bg-secondary/80"
-              >
+              <button type="button" onClick={() => setEmergencyConfirm(null)} className="rounded-lg border border-border/50 bg-secondary/60 px-5 py-2 text-foreground hover:bg-secondary/80">
                 Cancel
               </button>
-              <button
-                type="button"
-                onClick={handleConfirmEmergency}
-                className="rounded-lg border border-primary/30 bg-primary/80 px-5 py-2 text-primary-foreground hover:bg-primary"
-              >
+              <button type="button" onClick={() => { if (confirmService) { window.location.href = `tel:${confirmService.tel}`; setEmergencyConfirm(null); } }} className="rounded-lg border border-primary/30 bg-primary/80 px-5 py-2 text-primary-foreground hover:bg-primary">
                 Confirm
               </button>
             </div>
