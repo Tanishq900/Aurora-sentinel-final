@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuthStore } from '../../state/auth.store';
 import { sosService, SOSEvent } from '../../services/sos.service';
+import { beaconService, BeaconStatus } from '../../services/beacon.service';
 import { connectSocket } from '../../ws/client';
 import AuroraMap from '../../components/AuroraMap';
-import { Flame, Shield, Stethoscope } from 'lucide-react';
+import { Activity, Flame, HeartPulse, Shield, Stethoscope, Thermometer, Wind } from 'lucide-react';
 
 export default function SecurityDashboard() {
+  const HEARTBEAT_TIMEOUT_MS = 60000;
   const getAlertLabel = (alert: SOSEvent) => {
     if ((alert as any).source === 'beacon' || (alert as any).beacon_name || (alert as any).beacon_id) {
       return (alert as any).beacon_name || 'Beacon';
@@ -21,8 +23,11 @@ export default function SecurityDashboard() {
   };
   const { user, logout } = useAuthStore();
   const [alerts, setAlerts] = useState<SOSEvent[]>([]);
+  const [beacons, setBeacons] = useState<BeaconStatus[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isBeaconLoading, setIsBeaconLoading] = useState(true);
   const [emergencyConfirm, setEmergencyConfirm] = useState<null | 'fire' | 'ambulance' | 'police'>(null);
+  const [now, setNow] = useState(Date.now());
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -32,6 +37,7 @@ export default function SecurityDashboard() {
     }
 
     loadAlerts();
+    loadBeacons();
 
     // Connect WebSocket
     const token = localStorage.getItem('accessToken');
@@ -73,6 +79,14 @@ export default function SecurityDashboard() {
         upsertAlert(event);
       });
 
+      socket.on('beacon:heartbeat', (status: BeaconStatus) => {
+        upsertBeacon(status);
+      });
+
+      socket.on('beacon:status', (status: BeaconStatus) => {
+        upsertBeacon(status);
+      });
+
       // Listen for status updates
       socket.on('sos_status_update', (event: SOSEvent) => {
         setAlerts((prev) =>
@@ -92,10 +106,30 @@ export default function SecurityDashboard() {
         socket.off('new_sos_alert');
         socket.off('sos:created');
         socket.off('sos-updated');
+        socket.off('beacon:heartbeat');
+        socket.off('beacon:status');
         socket.disconnect();
       };
     }
   }, [user, navigate]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  const upsertBeacon = (incoming: BeaconStatus) => {
+    setBeacons((prev) => {
+      const idx = prev.findIndex((beacon) => beacon.id === incoming.id);
+      if (idx === -1) {
+        return [...prev, incoming];
+      }
+
+      const next = prev.slice();
+      next[idx] = { ...prev[idx], ...incoming };
+      return next;
+    });
+  };
 
   const loadAlerts = async () => {
     try {
@@ -105,6 +139,17 @@ export default function SecurityDashboard() {
       console.error('Failed to load alerts:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadBeacons = async () => {
+    try {
+      const statuses = await beaconService.getBeaconStatuses();
+      setBeacons(statuses);
+    } catch (error) {
+      console.error('Failed to load beacons:', error);
+    } finally {
+      setIsBeaconLoading(false);
     }
   };
 
@@ -150,6 +195,17 @@ export default function SecurityDashboard() {
     if (risk >= 50) return 'HIGH';
     if (risk >= 25) return 'MEDIUM';
     return 'LOW';
+  };
+
+  const isBeaconAlive = (beacon: BeaconStatus) => {
+    const referenceTime = beacon.last_heartbeat_at || beacon.last_seen_at;
+    if (!referenceTime) return false;
+    return now - new Date(referenceTime).getTime() <= HEARTBEAT_TIMEOUT_MS;
+  };
+
+  const formatLastSeen = (value: string | null) => {
+    if (!value) return 'Never';
+    return new Date(value).toLocaleTimeString();
   };
 
   const emergencyConfig = {
@@ -281,67 +337,163 @@ export default function SecurityDashboard() {
           />
         </div>
 
-        {/* Alerts Section */}
-        <div className="glass-panel p-6 border border-border/60">
-          <div className="flex items-center justify-between gap-4 pb-3 mb-4 border-b border-border/40">
-            <h2 className="text-xl font-semibold text-foreground">Live Alerts</h2>
-          </div>
-          
-          {isLoading ? (
-            <div className="text-center py-8 text-muted-foreground">Loading alerts...</div>
-          ) : alerts.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">No active alerts</div>
-          ) : (
-            <div className="space-y-4">
-              {alerts.map((alert) => (
-                <Link
-                  key={alert.id}
-                  to={`/security/alert/${alert.id}`}
-                  className="block bg-black/40 hover:bg-black/55 rounded-lg p-4 transition-colors border border-border/60 shadow-[0_10px_30px_rgba(0,0,0,0.35)]"
-                >
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <span className={`text-2xl font-bold ${getRiskColor(alert.risk_score)}`}>
-                          {alert.risk_score.toFixed(1)}
-                        </span>
-                        <span className={`px-3 py-1 rounded text-xs font-semibold ${
-                          alert.risk_score >= 50 ? 'bg-danger/20 text-danger' :
-                          alert.risk_score >= 25 ? 'bg-warning/20 text-warning' :
-                          'bg-safe/20 text-safe'
-                        }`}>
-                          {getRiskBadge(alert.risk_score)}
-                        </span>
-                        {Array.isArray((alert as any).attachments) && (alert as any).attachments.length > 0 ? (
-                          <span className="px-2 py-1 rounded text-xs font-semibold bg-aurora-cyan/15 text-aurora-cyan border border-aurora-cyan/30">
-                            MEDIA
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          <div className="glass-panel p-6 border border-border/60">
+            <div className="flex items-center justify-between gap-4 pb-3 mb-4 border-b border-border/40">
+              <h2 className="text-xl font-semibold text-foreground">Live Alerts</h2>
+            </div>
+
+            {isLoading ? (
+              <div className="text-center py-8 text-muted-foreground">Loading alerts...</div>
+            ) : alerts.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">No active alerts</div>
+            ) : (
+              <div className="space-y-4 max-h-[720px] overflow-y-auto pr-1">
+                {alerts.map((alert) => (
+                  <Link
+                    key={alert.id}
+                    to={`/security/alert/${alert.id}`}
+                    className="block bg-black/40 hover:bg-black/55 rounded-lg p-4 transition-colors border border-border/60 shadow-[0_10px_30px_rgba(0,0,0,0.35)]"
+                  >
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <span className={`text-2xl font-bold ${getRiskColor(alert.risk_score)}`}>
+                            {alert.risk_score.toFixed(1)}
                           </span>
-                        ) : null}
-                        <span className="text-muted-foreground text-sm">
-                          {formatTriggerType(alert.trigger_type)}
+                          <span className={`px-3 py-1 rounded text-xs font-semibold ${
+                            alert.risk_score >= 50 ? 'bg-danger/20 text-danger' :
+                            alert.risk_score >= 25 ? 'bg-warning/20 text-warning' :
+                            'bg-safe/20 text-safe'
+                          }`}>
+                            {getRiskBadge(alert.risk_score)}
+                          </span>
+                          {Array.isArray((alert as any).attachments) && (alert as any).attachments.length > 0 ? (
+                            <span className="px-2 py-1 rounded text-xs font-semibold bg-aurora-cyan/15 text-aurora-cyan border border-aurora-cyan/30">
+                              MEDIA
+                            </span>
+                          ) : null}
+                          <span className="text-muted-foreground text-sm">
+                            {formatTriggerType(alert.trigger_type)}
+                          </span>
+                        </div>
+                        <p className="text-muted-foreground text-sm">
+                          {new Date(alert.created_at).toLocaleString()}
+                        </p>
+                        <p className="text-muted-foreground text-sm">
+                          User: {getAlertLabel(alert)}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <span className={`px-3 py-1 rounded text-xs font-semibold ${
+                          alert.status === 'resolved' ? 'bg-safe/20 text-safe' :
+                          alert.status === 'acknowledged' ? 'bg-warning/20 text-warning' :
+                          'bg-danger/20 text-danger'
+                        }`}>
+                          {alert.status.toUpperCase()}
                         </span>
                       </div>
-                      <p className="text-muted-foreground text-sm">
-                        {new Date(alert.created_at).toLocaleString()}
-                      </p>
-                      <p className="text-muted-foreground text-sm">
-                        User: {getAlertLabel(alert)}
-                      </p>
                     </div>
-                    <div className="text-right">
-                      <span className={`px-3 py-1 rounded text-xs font-semibold ${
-                        alert.status === 'resolved' ? 'bg-safe/20 text-safe' :
-                        alert.status === 'acknowledged' ? 'bg-warning/20 text-warning' :
-                        'bg-danger/20 text-danger'
-                      }`}>
-                        {alert.status.toUpperCase()}
-                      </span>
-                    </div>
-                  </div>
-                </Link>
-              ))}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="glass-panel p-6 border border-border/60">
+            <div className="flex items-center justify-between gap-4 pb-3 mb-4 border-b border-border/40">
+              <h2 className="text-xl font-semibold text-foreground">Beacons</h2>
+              <button
+                onClick={loadBeacons}
+                className="px-4 py-2 bg-secondary/60 hover:bg-secondary/80 text-foreground rounded-lg transition-colors border border-border/50"
+              >
+                Refresh
+              </button>
             </div>
-          )}
+
+            {isBeaconLoading ? (
+              <div className="text-center py-8 text-muted-foreground">Loading beacons...</div>
+            ) : beacons.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">No beacons found</div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 max-h-[720px] overflow-y-auto pr-1">
+                {beacons.map((beacon) => {
+                  const alive = isBeaconAlive(beacon);
+                  const heartbeatColor = alive ? 'text-sky-400' : 'text-violet-500';
+                  const heartbeatBg = alive ? 'bg-sky-400/15 border-sky-400/30' : 'bg-violet-500/15 border-violet-500/30';
+
+                  return (
+                    <div
+                      key={beacon.id}
+                      className="rounded-xl border border-border/60 bg-black/40 p-4 shadow-[0_10px_30px_rgba(0,0,0,0.35)]"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <div className="text-lg font-semibold text-foreground">{beacon.name}</div>
+                          <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                            {beacon.node_role}
+                          </div>
+                        </div>
+                        <button
+                          onClick={loadBeacons}
+                          className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm ${heartbeatBg}`}
+                        >
+                          <HeartPulse className={`h-4 w-4 ${heartbeatColor} ${alive ? 'animate-pulse' : ''}`} />
+                          <span className={heartbeatColor}>{alive ? 'Alive' : 'Dead'}</span>
+                        </button>
+                      </div>
+
+                      <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                        <div className="rounded-lg bg-secondary/20 p-3 border border-border/40">
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Activity className="h-4 w-4" />
+                            Mode
+                          </div>
+                          <div className="mt-1 text-foreground">{beacon.last_mode}</div>
+                        </div>
+                        <div className="rounded-lg bg-secondary/20 p-3 border border-border/40">
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <HeartPulse className="h-4 w-4" />
+                            Last Seen
+                          </div>
+                          <div className="mt-1 text-foreground">{formatLastSeen(beacon.last_heartbeat_at || beacon.last_seen_at)}</div>
+                        </div>
+                        <div className="rounded-lg bg-secondary/20 p-3 border border-border/40">
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Thermometer className="h-4 w-4" />
+                            Temperature
+                          </div>
+                          <div className="mt-1 text-foreground">
+                            {typeof beacon.last_temperature_c === 'number' ? `${beacon.last_temperature_c.toFixed(1)} C` : 'N/A'}
+                          </div>
+                        </div>
+                        <div className="rounded-lg bg-secondary/20 p-3 border border-border/40">
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Wind className="h-4 w-4" />
+                            Smoke
+                          </div>
+                          <div className="mt-1 text-foreground">
+                            {typeof beacon.last_smoke_level === 'number' ? beacon.last_smoke_level.toFixed(0) : 'N/A'}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                        <span>{beacon.location?.address || beacon.location?.building || beacon.id}</span>
+                        <button
+                          onClick={loadBeacons}
+                          className="inline-flex items-center gap-2 rounded-full border border-border/50 bg-secondary/40 px-3 py-2 text-foreground hover:bg-secondary/60"
+                        >
+                          <HeartPulse className="h-4 w-4" />
+                          Manual Check
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
