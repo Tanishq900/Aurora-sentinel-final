@@ -39,6 +39,9 @@ function HeartbeatWave({ alive, lineId }: { alive: boolean; lineId: string }) {
   const points = alive
     ? '0,44 26,44 34,44 40,24 48,52 62,44 88,44 96,44 104,38 112,44 136,44 148,12 160,74 172,44 196,44 202,28 210,44 238,44 246,44 252,18 262,44 276,44 284,34 292,44 320,44'
     : '0,44 42,44 58,43 72,45 96,44 120,44 138,43 152,45 180,44 204,44 222,43 236,45 264,44 288,44 304,43 320,44';
+  const pathD = alive
+    ? 'M0,44 L26,44 L34,44 L40,24 L48,52 L62,44 L88,44 L96,44 L104,38 L112,44 L136,44 L148,12 L160,74 L172,44 L196,44 L202,28 L210,44 L238,44 L246,44 L252,18 L262,44 L276,44 L284,34 L292,44 L320,44'
+    : 'M0,44 L42,44 L58,43 L72,45 L96,44 L120,44 L138,43 L152,45 L180,44 L204,44 L222,43 L236,45 L264,44 L288,44 L304,43 L320,44';
 
   return (
     <div
@@ -92,7 +95,10 @@ function HeartbeatWave({ alive, lineId }: { alive: boolean; lineId: string }) {
           strokeWidth="2.2"
           strokeLinecap="round"
           strokeLinejoin="round"
-        />
+          strokeDasharray={alive ? '42 16 80 18' : undefined}
+        >
+          {alive ? <animate attributeName="stroke-dashoffset" values="0;-156" dur="2.2s" repeatCount="indefinite" /> : null}
+        </polyline>
 
         {alive ? (
           <circle r="4.4" fill="#dff8ff" filter={`url(#${lineId}-glow)`}>
@@ -108,7 +114,7 @@ function HeartbeatWave({ alive, lineId }: { alive: boolean; lineId: string }) {
           </circle>
         )}
 
-        <path id={`${lineId}-path`} d={alive ? 'M0,44 L26,44 L34,44 L40,24 L48,52 L62,44 L88,44 L96,44 L104,38 L112,44 L136,44 L148,12 L160,74 L172,44 L196,44 L202,28 L210,44 L238,44 L246,44 L252,18 L262,44 L276,44 L284,34 L292,44 L320,44' : 'M0,44 L320,44'} fill="none" stroke="transparent" />
+        <path id={`${lineId}-path`} d={pathD} fill="none" stroke="transparent" />
       </svg>
       <style>{`
         @keyframes aurora-heartbeat-sweep {
@@ -200,6 +206,7 @@ function BeaconStatusModal({
   onRefresh,
   onManualCheck,
   isLoading,
+  checkingBeaconId,
 }: {
   beacons: BeaconStatus[];
   now: number;
@@ -208,6 +215,7 @@ function BeaconStatusModal({
   onRefresh: () => void;
   onManualCheck: (beaconId: string) => void;
   isLoading: boolean;
+  checkingBeaconId: string | null;
 }) {
   if (!open) return null;
 
@@ -305,10 +313,11 @@ function BeaconStatusModal({
                         <button
                           type="button"
                           onClick={() => onManualCheck(beacon.id)}
+                          disabled={checkingBeaconId === beacon.id}
                           className="inline-flex items-center gap-2 rounded-full border border-sky-400/25 bg-sky-400/10 px-3 py-2 text-xs text-sky-300 transition-colors hover:bg-sky-400/15"
                         >
-                          <HeartPulse className="h-4 w-4" />
-                          Manual Check
+                          <HeartPulse className={`h-4 w-4 ${checkingBeaconId === beacon.id ? 'animate-pulse' : ''}`} />
+                          {checkingBeaconId === beacon.id ? 'Checking...' : 'Manual Check'}
                         </button>
                       </div>
                     </div>
@@ -330,6 +339,7 @@ export default function SecurityDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [isBeaconLoading, setIsBeaconLoading] = useState(true);
   const [showBeaconStatus, setShowBeaconStatus] = useState(false);
+  const [checkingBeaconId, setCheckingBeaconId] = useState<string | null>(null);
   const [emergencyConfirm, setEmergencyConfirm] = useState<null | 'fire' | 'ambulance' | 'police'>(null);
   const [now, setNow] = useState(Date.now());
   const navigate = useNavigate();
@@ -408,7 +418,33 @@ export default function SecurityDashboard() {
   };
 
   const manualCheckBeaconById = async (_beaconId: string) => {
-    await loadBeacons();
+    setCheckingBeaconId(_beaconId);
+    try {
+      const requestSnapshot = await beaconService.requestManualCheck(_beaconId);
+      upsertBeacon(requestSnapshot);
+      const requestedAt = requestSnapshot.manual_check_requested_at || new Date().toISOString();
+      const deadline = Date.now() + 15000;
+
+      while (Date.now() < deadline) {
+        await new Promise((resolve) => window.setTimeout(resolve, 1500));
+        const statuses = await beaconService.getBeaconStatuses();
+        setBeacons(statuses);
+
+        const refreshed = statuses.find((beacon) => beacon.id === _beaconId);
+        if (
+          refreshed &&
+          refreshed.last_heartbeat_at &&
+          new Date(refreshed.last_heartbeat_at).getTime() >= new Date(requestedAt).getTime() &&
+          refreshed.is_online
+        ) {
+          break;
+        }
+      }
+    } catch (error) {
+      console.error('Failed manual beacon check:', error);
+    } finally {
+      setCheckingBeaconId(null);
+    }
   };
 
   const playNotification = () => {
@@ -593,15 +629,6 @@ export default function SecurityDashboard() {
                   getRiskBadge={getRiskBadge}
                   formatTriggerType={formatTriggerType}
                 />
-                <AlertList
-                  title="Beacon Alerts"
-                  alerts={beaconAlerts}
-                  emptyText="No active beacon alerts"
-                  getAlertLabel={getAlertLabel}
-                  getRiskColor={getRiskColor}
-                  getRiskBadge={getRiskBadge}
-                  formatTriggerType={formatTriggerType}
-                />
               </div>
             )}
           </div>
@@ -671,6 +698,7 @@ export default function SecurityDashboard() {
         onRefresh={loadBeacons}
         onManualCheck={manualCheckBeaconById}
         isLoading={isBeaconLoading}
+        checkingBeaconId={checkingBeaconId}
       />
 
       {confirmService ? (

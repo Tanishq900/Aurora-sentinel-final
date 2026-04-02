@@ -21,11 +21,19 @@ export interface BeaconStatus {
   last_temperature_c: number | null;
   last_smoke_level: number | null;
   is_online: boolean;
+  manual_check_pending: boolean;
+  manual_check_requested_at: string | null;
+  manual_check_responded_at: string | null;
 }
 
 export const beaconService = {
   async getBeaconStatuses(): Promise<BeaconStatus[]> {
     const response = await api.get('/beacon/status');
+    return response.data;
+  },
+
+  async requestManualCheck(beaconId: string): Promise<BeaconStatus> {
+    const response = await api.post(`/beacon/${beaconId}/manual-check`);
     return response.data;
   },
 };
