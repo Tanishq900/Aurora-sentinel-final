@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { LocateFixed } from 'lucide-react';
 import { sosService, SOSEvent, SOSChatMessage } from '../../services/sos.service';
 import { connectSocket, getSocket } from '../../ws/client';
@@ -48,9 +48,11 @@ function getAlertLabel(alert: SOSEvent) {
 export default function SecurityAlertDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuthStore();
-  const [alert, setAlert] = useState<SOSEvent | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const navigationAlert = (location.state as { alert?: SOSEvent } | null)?.alert ?? null;
+  const [alert, setAlert] = useState<SOSEvent | null>(navigationAlert);
+  const [isLoading, setIsLoading] = useState(!navigationAlert);
   const [liveFeed, setLiveFeed] = useState<LiveFeedEntry[]>([]);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [attachmentUrls, setAttachmentUrls] = useState<string[]>([]);
@@ -111,6 +113,11 @@ export default function SecurityAlertDetail() {
   useEffect(() => {
     if (!id) return;
 
+    if (navigationAlert?.id === id) {
+      setIsLoading(false);
+      return;
+    }
+
     loadAlert();
 
     // Connect WebSocket and join SOS room
@@ -162,7 +169,7 @@ export default function SecurityAlertDetail() {
         socket.emit('leave_sos', id);
       };
     }
-  }, [id]);
+  }, [id, navigationAlert]);
 
   useEffect(() => {
     const urls = (alert as any)?.attachment_urls as string[] | undefined;

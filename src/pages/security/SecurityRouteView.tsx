@@ -245,9 +245,9 @@ export default function SecurityRouteView() {
         source: sourceId,
         paint: {
           'line-color': '#80e3ff',
-          'line-width': 14,
-          'line-opacity': 0.34,
-          'line-blur': 2.4,
+          'line-width': 10,
+          'line-opacity': 0.2,
+          'line-blur': 1.2,
         },
       });
     }
@@ -259,7 +259,7 @@ export default function SecurityRouteView() {
         source: sourceId,
         paint: {
           'line-color': '#e8fbff',
-          'line-width': 7,
+          'line-width': 5,
           'line-opacity': 0.98,
         },
       });
@@ -270,12 +270,11 @@ export default function SecurityRouteView() {
 
     const makeArrowMarker = (bearing: number) => {
       const el = document.createElement('div');
-      el.className = 'relative h-14 w-14';
+      el.className = 'relative h-10 w-10';
       el.innerHTML = `
-        <div style="position:absolute;inset:0;border-radius:9999px;background:radial-gradient(circle, rgba(125,227,255,0.35), rgba(14,165,233,0.05));filter:blur(1px);"></div>
         <div style="position:absolute;left:50%;top:50%;width:0;height:0;transform:translate(-50%,-50%) rotate(${bearing}deg);">
-          <div style="width:0;height:0;border-left:13px solid transparent;border-right:13px solid transparent;border-bottom:26px solid #e6fbff;filter:drop-shadow(0 0 12px rgba(136,221,255,0.85));"></div>
-          <div style="position:absolute;left:-4px;top:18px;width:8px;height:8px;border-radius:9999px;background:#0ea5e9;"></div>
+          <div style="width:0;height:0;border-left:10px solid transparent;border-right:10px solid transparent;border-bottom:22px solid #e6fbff;filter:drop-shadow(0 0 4px rgba(136,221,255,0.55));"></div>
+          <div style="position:absolute;left:-3px;top:15px;width:6px;height:6px;border-radius:9999px;background:#0ea5e9;"></div>
         </div>
       `;
       return el;
@@ -283,22 +282,21 @@ export default function SecurityRouteView() {
 
     const makeSosMarker = () => {
       const el = document.createElement('div');
-      el.className = 'relative flex h-14 w-14 items-center justify-center';
+      el.className = 'relative flex h-10 w-10 items-center justify-center';
       el.innerHTML = `
-        <div style="position:absolute;inset:6px;border-radius:9999px;background:rgba(239,68,68,0.18);box-shadow:0 0 0 10px rgba(239,68,68,0.08), 0 0 26px rgba(251,113,133,0.45);"></div>
-        <div style="position:absolute;inset:13px;border-radius:9999px;background:linear-gradient(135deg,#ef4444,#fb7185);border:3px solid white;display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:12px;">SOS</div>
+        <div style="position:absolute;inset:0;border-radius:9999px;border:2px solid rgba(255,255,255,0.92);background:linear-gradient(135deg,#ef4444,#fb7185);box-shadow:0 0 10px rgba(251,113,133,0.28);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:10px;letter-spacing:0.04em;">SOS</div>
       `;
       return el;
     };
 
     markersRef.current.push(
-      new mapboxgl.Marker({ element: makeArrowMarker(arrowBearing), rotationAlignment: 'map' })
+      new mapboxgl.Marker({ element: makeArrowMarker(arrowBearing), anchor: 'center', rotationAlignment: 'map' })
         .setLngLat([origin.lng, origin.lat])
         .addTo(map)
     );
 
     markersRef.current.push(
-      new mapboxgl.Marker({ element: makeSosMarker() })
+      new mapboxgl.Marker({ element: makeSosMarker(), anchor: 'center' })
         .setLngLat([destination.lng, destination.lat])
         .addTo(map)
     );
