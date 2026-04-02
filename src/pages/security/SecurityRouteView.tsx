@@ -35,6 +35,18 @@ function formatDuration(seconds: number | null) {
   return remaining > 0 ? `${hours} hr ${remaining} min` : `${hours} hr`;
 }
 
+function estimateDirectDistanceMeters(origin: { lat: number; lng: number }, destination: { lat: number; lng: number }) {
+  const toRadians = (value: number) => (value * Math.PI) / 180;
+  const earthRadiusMeters = 6371000;
+  const latDelta = toRadians(destination.lat - origin.lat);
+  const lngDelta = toRadians(destination.lng - origin.lng);
+  const a =
+    Math.sin(latDelta / 2) ** 2 +
+    Math.cos(toRadians(origin.lat)) * Math.cos(toRadians(destination.lat)) * Math.sin(lngDelta / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return earthRadiusMeters * c;
+}
+
 function getArrowBearing(geometry: RouteGeometry | null): number {
   const coordinates = geometry?.geometry?.coordinates;
   if (!coordinates || coordinates.length < 2) return 0;
@@ -165,10 +177,24 @@ export default function SecurityRouteView() {
     if (!token) return;
 
     const controller = new AbortController();
+    const directDistance = estimateDirectDistanceMeters(origin, destination);
+    setRouteGeometry({
+      type: 'Feature',
+      geometry: {
+        type: 'LineString',
+        coordinates: [
+          [origin.lng, origin.lat],
+          [destination.lng, destination.lat],
+        ],
+      },
+      properties: {},
+    });
+    setDistanceMeters(directDistance);
+    setDurationSeconds((directDistance / 1000 / 35) * 3600);
+    setRouteError(null);
 
     const loadRoute = async () => {
       setIsLoadingRoute(true);
-      setRouteError(null);
 
       try {
         const url =
@@ -197,20 +223,7 @@ export default function SecurityRouteView() {
       } catch (error: any) {
         if (controller.signal.aborted) return;
         console.error('Failed to load route:', error);
-        setRouteGeometry({
-          type: 'Feature',
-          geometry: {
-            type: 'LineString',
-            coordinates: [
-              [origin.lng, origin.lat],
-              [destination.lng, destination.lat],
-            ],
-          },
-          properties: {},
-        });
-        setDistanceMeters(null);
-        setDurationSeconds(null);
-        setRouteError('Showing direct line fallback because live routing could not be loaded.');
+        setRouteError('Using direct route first while live fastest-route data is unavailable.');
       } finally {
         setIsLoadingRoute(false);
       }
@@ -290,13 +303,13 @@ export default function SecurityRouteView() {
     };
 
     markersRef.current.push(
-      new mapboxgl.Marker({ element: makeArrowMarker(arrowBearing), anchor: 'center', rotationAlignment: 'map' })
+      new mapboxgl.Marker({ element: makeArrowMarker(arrowBearing), anchor: 'center', rotationAlignment: 'map', pitchAlignment: 'map' })
         .setLngLat([origin.lng, origin.lat])
         .addTo(map)
     );
 
     markersRef.current.push(
-      new mapboxgl.Marker({ element: makeSosMarker(), anchor: 'center' })
+      new mapboxgl.Marker({ element: makeSosMarker(), anchor: 'center', pitchAlignment: 'map' })
         .setLngLat([destination.lng, destination.lat])
         .addTo(map)
     );

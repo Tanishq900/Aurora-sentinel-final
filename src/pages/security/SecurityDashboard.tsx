@@ -155,6 +155,7 @@ function AlertList({
             <Link
               key={alert.id}
               to={`/security/alert/${alert.id}`}
+              state={{ alert }}
               className="block rounded-lg border border-border/60 bg-black/40 p-4 shadow-[0_10px_30px_rgba(0,0,0,0.35)] transition-colors hover:bg-black/55"
             >
               <div className="flex items-start justify-between gap-4">
@@ -654,6 +655,7 @@ export default function SecurityDashboard() {
                   <Link
                     key={alert.id}
                     to={`/security/alert/${alert.id}`}
+                    state={{ alert }}
                     className="block rounded-lg border border-border/60 bg-black/40 p-4 shadow-[0_10px_30px_rgba(0,0,0,0.35)] transition-colors hover:bg-black/55"
                   >
                     <div className="flex items-start justify-between gap-4">

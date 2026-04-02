@@ -115,61 +115,63 @@ export default function SecurityAlertDetail() {
 
     if (navigationAlert?.id === id) {
       setIsLoading(false);
-      return;
-    }
-
-    loadAlert();
-
-    // Connect WebSocket and join SOS room
-    const token = localStorage.getItem('accessToken');
-    if (token) {
-      const socket = connectSocket(token);
-      socket.emit('join_sos', id);
-
-      socket.on('live_feed', (data: any) => {
-        setLiveFeed((prev) => {
-          const expectedUserId = alertUserIdRef.current;
-          if (expectedUserId && data?.userId && data.userId !== expectedUserId) {
-            return prev;
-          }
-          return [...prev.slice(-50), data];
-        });
-      });
-
-      socket.on('sos_status_update', (event: SOSEvent) => {
-        if (event.id === id) {
-          setAlert((prev) => {
-            if (!prev) return event;
-            return {
-              ...prev,
-              ...event,
-              attachment_urls: (event as any)?.attachment_urls ?? (prev as any)?.attachment_urls,
-            } as any;
-          });
-        }
-      });
-
-      socket.on('sos-updated', (event: SOSEvent) => {
-        if (event.id === id) {
-          setAlert((prev) => {
-            if (!prev) return event;
-            return {
-              ...prev,
-              ...event,
-              attachment_urls: (event as any)?.attachment_urls ?? (prev as any)?.attachment_urls,
-            } as any;
-          });
-        }
-      });
-
-      return () => {
-        socket.off('live_feed');
-        socket.off('sos_status_update');
-        socket.off('sos-updated');
-        socket.emit('leave_sos', id);
-      };
+    } else {
+      loadAlert();
     }
   }, [id, navigationAlert]);
+
+  useEffect(() => {
+    if (!id) return;
+
+    const token = localStorage.getItem('accessToken');
+    if (!token) return;
+
+    const socket = connectSocket(token);
+    socket.emit('join_sos', id);
+
+    socket.on('live_feed', (data: any) => {
+      setLiveFeed((prev) => {
+        const expectedUserId = alertUserIdRef.current;
+        if (expectedUserId && data?.userId && data.userId !== expectedUserId) {
+          return prev;
+        }
+        return [...prev.slice(-50), data];
+      });
+    });
+
+    socket.on('sos_status_update', (event: SOSEvent) => {
+      if (event.id === id) {
+        setAlert((prev) => {
+          if (!prev) return event;
+          return {
+            ...prev,
+            ...event,
+            attachment_urls: (event as any)?.attachment_urls ?? (prev as any)?.attachment_urls,
+          } as any;
+        });
+      }
+    });
+
+    socket.on('sos-updated', (event: SOSEvent) => {
+      if (event.id === id) {
+        setAlert((prev) => {
+          if (!prev) return event;
+          return {
+            ...prev,
+            ...event,
+            attachment_urls: (event as any)?.attachment_urls ?? (prev as any)?.attachment_urls,
+          } as any;
+        });
+      }
+    });
+
+    return () => {
+      socket.off('live_feed');
+      socket.off('sos_status_update');
+      socket.off('sos-updated');
+      socket.emit('leave_sos', id);
+    };
+  }, [id]);
 
   useEffect(() => {
     const urls = (alert as any)?.attachment_urls as string[] | undefined;
