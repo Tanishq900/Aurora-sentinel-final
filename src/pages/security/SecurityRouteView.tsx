@@ -6,6 +6,14 @@ import { ArrowLeft, ExternalLink, LocateFixed, Route, ShieldAlert } from 'lucide
 import { sosService, SOSEvent } from '../../services/sos.service';
 
 type RouteGeometry = GeoJSON.Feature<GeoJSON.LineString>;
+type RoutePointFeature = GeoJSON.Feature<
+  GeoJSON.Point,
+  {
+    kind: 'sos' | 'responder';
+    label: string;
+    bearing?: number;
+  }
+>;
 const LAST_RESPONDER_LOCATION_KEY = 'aurora:lastResponderLocation';
 
 type RouteLocationState = {
@@ -75,7 +83,6 @@ export default function SecurityRouteView() {
 
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
-  const markersRef = useRef<mapboxgl.Marker[]>([]);
 
   const destination = useMemo(() => {
     const lat = alert?.location?.lat;
@@ -168,8 +175,6 @@ export default function SecurityRouteView() {
 
     return () => {
       setMapReady(false);
-      markersRef.current.forEach((marker) => marker.remove());
-      markersRef.current = [];
       mapRef.current?.remove();
       mapRef.current = null;
     };
@@ -245,6 +250,13 @@ export default function SecurityRouteView() {
     const sourceId = 'aurora-route';
     const haloLayerId = 'aurora-route-halo';
     const lineLayerId = 'aurora-route-line';
+    const pointsSourceId = 'aurora-route-points';
+    const sosHaloLayerId = 'aurora-sos-halo';
+    const sosCoreLayerId = 'aurora-sos-core';
+    const sosLabelLayerId = 'aurora-sos-label';
+    const responderGlowLayerId = 'aurora-responder-glow';
+    const responderArrowLayerId = 'aurora-responder-arrow';
+    const responderDotLayerId = 'aurora-responder-dot';
     const arrowBearing = getArrowBearing(routeGeometry);
 
     if (map.getSource(sourceId)) {
@@ -283,41 +295,144 @@ export default function SecurityRouteView() {
       });
     }
 
-    markersRef.current.forEach((marker) => marker.remove());
-    markersRef.current = [];
-
-    const makeArrowMarker = (bearing: number) => {
-      const el = document.createElement('div');
-      el.className = 'relative h-10 w-10';
-      el.innerHTML = `
-        <div style="position:absolute;left:50%;top:50%;width:0;height:0;transform:translate(-50%,-50%) rotate(${bearing}deg);">
-          <div style="width:0;height:0;border-left:10px solid transparent;border-right:10px solid transparent;border-bottom:22px solid #e6fbff;filter:drop-shadow(0 0 4px rgba(136,221,255,0.55));"></div>
-          <div style="position:absolute;left:-3px;top:15px;width:6px;height:6px;border-radius:9999px;background:#0ea5e9;"></div>
-        </div>
-      `;
-      return el;
+    const pointFeatures: GeoJSON.FeatureCollection<GeoJSON.Point> = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          geometry: {
+            type: 'Point',
+            coordinates: [destination.lng, destination.lat],
+          },
+          properties: {
+            kind: 'sos',
+            label: 'SOS',
+          },
+        } satisfies RoutePointFeature,
+        {
+          type: 'Feature',
+          geometry: {
+            type: 'Point',
+            coordinates: [origin.lng, origin.lat],
+          },
+          properties: {
+            kind: 'responder',
+            label: '▲',
+            bearing: arrowBearing,
+          },
+        } satisfies RoutePointFeature,
+      ],
     };
 
-    const makeSosMarker = () => {
-      const el = document.createElement('div');
-      el.className = 'relative flex h-10 w-10 items-center justify-center';
-      el.innerHTML = `
-        <div style="position:absolute;inset:0;border-radius:9999px;border:2px solid rgba(255,255,255,0.92);background:linear-gradient(135deg,#ef4444,#fb7185);box-shadow:0 0 10px rgba(251,113,133,0.28);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:10px;letter-spacing:0.04em;">SOS</div>
-      `;
-      return el;
-    };
+    if (map.getSource(pointsSourceId)) {
+      (map.getSource(pointsSourceId) as mapboxgl.GeoJSONSource).setData(pointFeatures);
+    } else {
+      map.addSource(pointsSourceId, {
+        type: 'geojson',
+        data: pointFeatures,
+      });
+    }
 
-    markersRef.current.push(
-      new mapboxgl.Marker({ element: makeArrowMarker(arrowBearing), anchor: 'center', rotationAlignment: 'map', pitchAlignment: 'map' })
-        .setLngLat([origin.lng, origin.lat])
-        .addTo(map)
-    );
+    if (!map.getLayer(sosHaloLayerId)) {
+      map.addLayer({
+        id: sosHaloLayerId,
+        type: 'circle',
+        source: pointsSourceId,
+        filter: ['==', ['get', 'kind'], 'sos'],
+        paint: {
+          'circle-radius': 21,
+          'circle-color': '#fb7185',
+          'circle-opacity': 0.18,
+          'circle-blur': 0.4,
+        },
+      });
+    }
 
-    markersRef.current.push(
-      new mapboxgl.Marker({ element: makeSosMarker(), anchor: 'center', pitchAlignment: 'map' })
-        .setLngLat([destination.lng, destination.lat])
-        .addTo(map)
-    );
+    if (!map.getLayer(sosCoreLayerId)) {
+      map.addLayer({
+        id: sosCoreLayerId,
+        type: 'circle',
+        source: pointsSourceId,
+        filter: ['==', ['get', 'kind'], 'sos'],
+        paint: {
+          'circle-radius': 16,
+          'circle-color': '#ef4444',
+          'circle-stroke-width': 3,
+          'circle-stroke-color': '#ffffff',
+        },
+      });
+    }
+
+    if (!map.getLayer(sosLabelLayerId)) {
+      map.addLayer({
+        id: sosLabelLayerId,
+        type: 'symbol',
+        source: pointsSourceId,
+        filter: ['==', ['get', 'kind'], 'sos'],
+        layout: {
+          'text-field': ['get', 'label'],
+          'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+          'text-size': 10,
+          'text-letter-spacing': 0.05,
+        },
+        paint: {
+          'text-color': '#ffffff',
+        },
+      });
+    }
+
+    if (!map.getLayer(responderGlowLayerId)) {
+      map.addLayer({
+        id: responderGlowLayerId,
+        type: 'circle',
+        source: pointsSourceId,
+        filter: ['==', ['get', 'kind'], 'responder'],
+        paint: {
+          'circle-radius': 12,
+          'circle-color': '#7dd3fc',
+          'circle-opacity': 0.12,
+          'circle-blur': 0.8,
+        },
+      });
+    }
+
+    if (!map.getLayer(responderDotLayerId)) {
+      map.addLayer({
+        id: responderDotLayerId,
+        type: 'circle',
+        source: pointsSourceId,
+        filter: ['==', ['get', 'kind'], 'responder'],
+        paint: {
+          'circle-radius': 4,
+          'circle-color': '#0ea5e9',
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#e6fbff',
+        },
+      });
+    }
+
+    if (!map.getLayer(responderArrowLayerId)) {
+      map.addLayer({
+        id: responderArrowLayerId,
+        type: 'symbol',
+        source: pointsSourceId,
+        filter: ['==', ['get', 'kind'], 'responder'],
+        layout: {
+          'text-field': ['get', 'label'],
+          'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+          'text-size': 24,
+          'text-rotate': ['get', 'bearing'],
+          'text-allow-overlap': true,
+          'text-ignore-placement': true,
+          'text-offset': [0, -0.45],
+        },
+        paint: {
+          'text-color': '#e6fbff',
+          'text-halo-color': 'rgba(125, 227, 255, 0.45)',
+          'text-halo-width': 1.5,
+        },
+      });
+    }
 
     const bounds = new mapboxgl.LngLatBounds();
     bounds.extend([origin.lng, origin.lat]);
