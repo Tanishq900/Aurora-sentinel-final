@@ -22,6 +22,17 @@ const ROLE_ORDER: Record<BeaconStatus['node_role'], number> = {
   gateway: 3,
 };
 
+interface BeaconWarningToast {
+  beacon_id: string;
+  beacon_name: string;
+  node_role: BeaconStatus['node_role'];
+  temperature_c: number;
+  smoke_level: number;
+  message: string;
+  recorded_at: string;
+  location?: BeaconStatus['location'];
+}
+
 function isBeaconAlive(beacon: BeaconStatus, now: number): boolean {
   const referenceTime = beacon.last_heartbeat_at || beacon.last_seen_at;
   if (!referenceTime) return false;
@@ -339,6 +350,8 @@ export default function SecurityDashboard() {
   const [isBeaconLoading, setIsBeaconLoading] = useState(true);
   const [showBeaconStatus, setShowBeaconStatus] = useState(false);
   const [checkingBeaconId, setCheckingBeaconId] = useState<string | null>(null);
+  const [manualCheckToast, setManualCheckToast] = useState<string | null>(null);
+  const [beaconWarning, setBeaconWarning] = useState<BeaconWarningToast | null>(null);
   const [emergencyConfirm, setEmergencyConfirm] = useState<null | 'fire' | 'ambulance' | 'police'>(null);
   const [now, setNow] = useState(Date.now());
   const navigate = useNavigate();
@@ -418,11 +431,13 @@ export default function SecurityDashboard() {
 
   const manualCheckBeaconById = async (_beaconId: string) => {
     setCheckingBeaconId(_beaconId);
+    setManualCheckToast(null);
     try {
       const requestSnapshot = await beaconService.requestManualCheck(_beaconId);
       upsertBeacon(requestSnapshot);
       const requestedAt = requestSnapshot.manual_check_requested_at || new Date().toISOString();
-      const deadline = Date.now() + 15000;
+      const deadline = Date.now() + 20000;
+      let confirmed = false;
 
       while (Date.now() < deadline) {
         await new Promise((resolve) => window.setTimeout(resolve, 1500));
@@ -432,15 +447,22 @@ export default function SecurityDashboard() {
         const refreshed = statuses.find((beacon) => beacon.id === _beaconId);
         if (
           refreshed &&
-          refreshed.last_heartbeat_at &&
-          new Date(refreshed.last_heartbeat_at).getTime() >= new Date(requestedAt).getTime() &&
+          refreshed.manual_check_responded_at &&
+          new Date(refreshed.manual_check_responded_at).getTime() >= new Date(requestedAt).getTime() &&
           refreshed.is_online
         ) {
+          confirmed = true;
+          setManualCheckToast(`${refreshed.name} responded and is alive.`);
           break;
         }
       }
+
+      if (!confirmed) {
+        setManualCheckToast(`No fresh response received from ${requestSnapshot.name} yet.`);
+      }
     } catch (error) {
       console.error('Failed manual beacon check:', error);
+      setManualCheckToast('Manual check failed. Please try again.');
     } finally {
       setCheckingBeaconId(null);
     }
@@ -508,6 +530,10 @@ export default function SecurityDashboard() {
     socket.on('sos-updated', upsertAlert);
     socket.on('beacon:heartbeat', (status: BeaconStatus) => upsertBeacon(status));
     socket.on('beacon:status', (status: BeaconStatus) => upsertBeacon(status));
+    socket.on('beacon:warning', (warning: BeaconWarningToast) => {
+      setBeaconWarning(warning);
+      playNotification();
+    });
 
     return () => {
       socket.off('new_sos_alert');
@@ -515,6 +541,7 @@ export default function SecurityDashboard() {
       socket.off('sos-updated');
       socket.off('beacon:heartbeat');
       socket.off('beacon:status');
+      socket.off('beacon:warning');
       socket.disconnect();
     };
   }, [user, navigate]);
@@ -523,6 +550,18 @@ export default function SecurityDashboard() {
     const interval = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (!manualCheckToast) return;
+    const timeout = window.setTimeout(() => setManualCheckToast(null), 3500);
+    return () => window.clearTimeout(timeout);
+  }, [manualCheckToast]);
+
+  useEffect(() => {
+    if (!beaconWarning) return;
+    const timeout = window.setTimeout(() => setBeaconWarning(null), 7000);
+    return () => window.clearTimeout(timeout);
+  }, [beaconWarning]);
 
   const emergencyConfig = {
     fire: {
@@ -728,6 +767,35 @@ export default function SecurityDashboard() {
               </button>
             </div>
           </div>
+        </div>
+      ) : null}
+
+      {beaconWarning ? (
+        <div className="fixed right-6 top-6 z-[100000] w-full max-w-sm rounded-2xl border border-amber-400/35 bg-black/90 p-4 shadow-[0_20px_60px_rgba(0,0,0,0.55)] backdrop-blur-md">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="text-xs uppercase tracking-[0.22em] text-amber-300">Beacon Warning</div>
+              <div className="mt-1 text-lg font-semibold text-foreground">{beaconWarning.message}</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setBeaconWarning(null)}
+              className="rounded-lg border border-border/50 bg-secondary/50 p-2 text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="mt-3 text-sm text-muted-foreground">
+            <div>Temperature: {beaconWarning.temperature_c.toFixed(1)} C</div>
+            <div>Smoke: {beaconWarning.smoke_level.toFixed(0)}</div>
+            <div>{beaconWarning.beacon_name}</div>
+          </div>
+        </div>
+      ) : null}
+
+      {manualCheckToast ? (
+        <div className="fixed bottom-6 right-6 z-[100000] rounded-xl border border-sky-400/25 bg-black/90 px-4 py-3 text-sm text-sky-100 shadow-[0_18px_40px_rgba(0,0,0,0.45)] backdrop-blur-md">
+          {manualCheckToast}
         </div>
       ) : null}
     </div>
