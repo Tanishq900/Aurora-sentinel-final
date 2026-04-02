@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { LocateFixed } from 'lucide-react';
 import { sosService, SOSEvent, SOSChatMessage } from '../../services/sos.service';
 import { connectSocket, getSocket } from '../../ws/client';
 import { useAuthStore } from '../../state/auth.store';
@@ -508,8 +509,21 @@ export default function SecurityAlertDetail() {
           <div className="space-y-6">
             {/* Map */}
             <div className="map-container p-6">
-              <h3 className="text-xl font-semibold text-foreground mb-4">Location</h3>
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h3 className="text-xl font-semibold text-foreground">Location</h3>
+                {hasCoordinates ? (
+                  <Link
+                    to={`/security/alert/${alert.id}/locate`}
+                    state={{ alert }}
+                    className="inline-flex items-center gap-2 rounded-xl border border-sky-400/30 bg-sky-400/10 px-4 py-2 text-sm text-sky-200 transition-colors hover:bg-sky-400/15"
+                  >
+                    <LocateFixed className="h-4 w-4" />
+                    Locate
+                  </Link>
+                ) : null}
+              </div>
               <div className="text-muted-foreground mb-4">
+                {alert.location?.address ? <div className="mb-2 text-foreground/90">{alert.location.address}</div> : null}
                 {hasCoordinates ? (
                   <>
                     <div>Latitude: {lat}</div>

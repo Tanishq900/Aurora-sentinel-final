@@ -9,6 +9,7 @@ import VerifyComplete from './pages/auth/VerifyComplete';
 import StudentDashboard from './pages/student/StudentDashboard';
 import SecurityDashboard from './pages/security/SecurityDashboard';
 import SecurityAlertDetail from './pages/security/SecurityAlertDetail';
+import SecurityRouteView from './pages/security/SecurityRouteView';
 import SecurityHistory from './pages/security/SecurityHistory';
 import AnalyticsPage from './pages/security/AnalyticsPage';
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -63,6 +64,15 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={['security']}>
               <SecurityAlertDetail />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/security/alert/:id/locate"
+          element={
+            <ProtectedRoute allowedRoles={['security']}>
+              <SecurityRouteView />
             </ProtectedRoute>
           }
         />

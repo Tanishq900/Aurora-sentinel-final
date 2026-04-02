@@ -49,12 +49,6 @@ function HeartbeatWave({ alive, lineId }: { alive: boolean; lineId: string }) {
         alive ? 'border-sky-300/15 bg-[#071524]' : 'border-violet-500/10 bg-[#130d1f]'
       }`}
     >
-      <div
-        className={`pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 blur-2xl ${
-          alive ? 'bg-sky-300/25' : 'bg-violet-500/10'
-        }`}
-        style={{ animation: `aurora-heartbeat-sweep ${alive ? '3.8s' : '6s'} linear infinite` }}
-      />
       <svg viewBox="0 0 320 88" className="h-24 w-full" preserveAspectRatio="none" role="img">
         <defs>
           <filter id={`${lineId}-glow`} x="-40%" y="-160%" width="220%" height="420%">
@@ -73,6 +67,17 @@ function HeartbeatWave({ alive, lineId }: { alive: boolean; lineId: string }) {
             <stop offset="48%" stopColor={coreColor} stopOpacity="1" />
             <stop offset="100%" stopColor={lineColor} stopOpacity="0.55" />
           </linearGradient>
+          <filter id={`${lineId}-dot-glow`} x="-240%" y="-240%" width="580%" height="580%">
+            <feGaussianBlur stdDeviation={alive ? '7.5' : '4.2'} result="dotBlur" />
+            <feColorMatrix
+              in="dotBlur"
+              type="matrix"
+              values="1 0 0 0 0
+                      0 1 0 0 0
+                      0 0 1 0 0
+                      0 0 0 14 -6"
+            />
+          </filter>
         </defs>
 
         <polyline
@@ -98,11 +103,18 @@ function HeartbeatWave({ alive, lineId }: { alive: boolean; lineId: string }) {
         />
 
         {alive ? (
-          <circle r="4.4" fill="#dff8ff" filter={`url(#${lineId}-glow)`}>
-            <animateMotion dur="3.8s" repeatCount="indefinite" rotate="auto">
-              <mpath href={`#${lineId}-path`} />
-            </animateMotion>
-          </circle>
+          <>
+            <circle r="9" fill="#8ddfff" opacity="0.28" filter={`url(#${lineId}-dot-glow)`}>
+              <animateMotion dur="3.8s" repeatCount="indefinite" rotate="auto">
+                <mpath href={`#${lineId}-path`} />
+              </animateMotion>
+            </circle>
+            <circle r="4.4" fill="#e6fbff" filter={`url(#${lineId}-glow)`}>
+              <animateMotion dur="3.8s" repeatCount="indefinite" rotate="auto">
+                <mpath href={`#${lineId}-path`} />
+              </animateMotion>
+            </circle>
+          </>
         ) : (
           <circle r="2.3" fill="#8d63c7" opacity="0.9">
             <animateMotion dur="6s" repeatCount="indefinite" rotate="auto">
@@ -113,14 +125,6 @@ function HeartbeatWave({ alive, lineId }: { alive: boolean; lineId: string }) {
 
         <path id={`${lineId}-path`} d={pathD} fill="none" stroke="transparent" />
       </svg>
-      <style>{`
-        @keyframes aurora-heartbeat-sweep {
-          0% { transform: translateX(0); opacity: 0; }
-          12% { opacity: 1; }
-          88% { opacity: 1; }
-          100% { transform: translateX(520%); opacity: 0; }
-        }
-      `}</style>
     </div>
   );
 }
@@ -219,7 +223,7 @@ function BeaconStatusModal({
   return (
     <div className="fixed inset-0 z-[99999] bg-black/80 backdrop-blur-md">
       <div className="mx-auto flex min-h-screen max-w-7xl items-center justify-center px-4 py-8">
-        <div className="glass-panel w-full border border-border/60 bg-black/90 p-6 shadow-[0_30px_120px_rgba(0,0,0,0.65)]">
+        <div className="glass-panel flex max-h-[88vh] w-full flex-col border border-border/60 bg-black/90 p-6 shadow-[0_30px_120px_rgba(0,0,0,0.65)]">
           <div className="mb-6 flex items-start justify-between gap-4 border-b border-border/40 pb-4">
             <div>
               <h2 className="text-2xl font-semibold text-foreground">Beacon Status Monitor</h2>
@@ -249,7 +253,8 @@ function BeaconStatusModal({
           ) : beacons.length === 0 ? (
             <div className="py-20 text-center text-muted-foreground">No beacons found</div>
           ) : (
-            <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+            <div className="overflow-y-auto pr-1">
+              <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
               {beacons.map((beacon) => {
                 const alive = isBeaconAlive(beacon, now);
 
@@ -318,6 +323,7 @@ function BeaconStatusModal({
                   </div>
                 );
               })}
+              </div>
             </div>
           )}
         </div>
