@@ -71,6 +71,7 @@ export default function SecurityRouteView() {
   const [durationSeconds, setDurationSeconds] = useState<number | null>(null);
   const [routeError, setRouteError] = useState<string | null>(null);
   const [isLoadingRoute, setIsLoadingRoute] = useState(false);
+  const [mapReady, setMapReady] = useState(false);
 
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
@@ -161,8 +162,12 @@ export default function SecurityRouteView() {
     });
 
     mapRef.current.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), 'top-right');
+    mapRef.current.on('load', () => {
+      setMapReady(true);
+    });
 
     return () => {
+      setMapReady(false);
       markersRef.current.forEach((marker) => marker.remove());
       markersRef.current = [];
       mapRef.current?.remove();
@@ -235,7 +240,7 @@ export default function SecurityRouteView() {
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !map.isStyleLoaded() || !routeGeometry || !origin || !destination) return;
+    if (!map || !mapReady || !routeGeometry || !origin || !destination) return;
 
     const sourceId = 'aurora-route';
     const haloLayerId = 'aurora-route-halo';
@@ -318,22 +323,8 @@ export default function SecurityRouteView() {
     bounds.extend([origin.lng, origin.lat]);
     bounds.extend([destination.lng, destination.lat]);
     map.fitBounds(bounds, { padding: 80, maxZoom: 16, duration: 1200 });
-  }, [destination, origin, routeGeometry]);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-
-    const onLoad = () => {
-      if (!routeGeometry || !origin || !destination) return;
-      map.resize();
-    };
-
-    map.on('load', onLoad);
-    return () => {
-      map.off('load', onLoad);
-    };
-  }, [destination, origin, routeGeometry]);
+    map.resize();
+  }, [destination, mapReady, origin, routeGeometry]);
 
   if (isLoadingAlert) {
     return (
