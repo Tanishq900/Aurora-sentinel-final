@@ -50,11 +50,11 @@ function HeartbeatWave({ alive, lineId }: { alive: boolean; lineId: string }) {
       }`}
     >
       <div
-      className={`pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 blur-2xl ${
-        alive ? 'bg-sky-300/25' : 'bg-violet-500/10'
-      }`}
-      style={{ animation: `aurora-heartbeat-sweep ${alive ? '3.8s' : '6s'} linear infinite` }}
-    />
+        className={`pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 blur-2xl ${
+          alive ? 'bg-sky-300/25' : 'bg-violet-500/10'
+        }`}
+        style={{ animation: `aurora-heartbeat-sweep ${alive ? '3.8s' : '6s'} linear infinite` }}
+      />
       <svg viewBox="0 0 320 88" className="h-24 w-full" preserveAspectRatio="none" role="img">
         <defs>
           <filter id={`${lineId}-glow`} x="-40%" y="-160%" width="220%" height="420%">
@@ -95,10 +95,7 @@ function HeartbeatWave({ alive, lineId }: { alive: boolean; lineId: string }) {
           strokeWidth="2.2"
           strokeLinecap="round"
           strokeLinejoin="round"
-          strokeDasharray={alive ? '42 16 80 18' : undefined}
-        >
-          {alive ? <animate attributeName="stroke-dashoffset" values="0;-156" dur="2.2s" repeatCount="indefinite" /> : null}
-        </polyline>
+        />
 
         {alive ? (
           <circle r="4.4" fill="#dff8ff" filter={`url(#${lineId}-glow)`}>
@@ -226,9 +223,6 @@ function BeaconStatusModal({
           <div className="mb-6 flex items-start justify-between gap-4 border-b border-border/40 pb-4">
             <div>
               <h2 className="text-2xl font-semibold text-foreground">Beacon Status Monitor</h2>
-              <p className="text-sm text-muted-foreground">
-                Live hospital-style heartbeat lines. Blue moves while active, deep purple stays silent when dead.
-              </p>
             </div>
             <div className="flex items-center gap-3">
               <button
