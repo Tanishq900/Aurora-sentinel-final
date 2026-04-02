@@ -51,7 +51,7 @@ function HeartbeatWave({ alive, lineId }: { alive: boolean; lineId: string }) {
     >
       <svg viewBox="0 0 320 88" className="h-24 w-full" preserveAspectRatio="none" role="img">
         <defs>
-          <filter id={`${lineId}-glow`} x="-40%" y="-160%" width="220%" height="420%">
+          <filter id={`${lineId}-line-glow`} x="-20%" y="-80%" width="140%" height="260%">
             <feGaussianBlur stdDeviation={alive ? '4.4' : '2.2'} result="blur" />
             <feColorMatrix
               in="blur"
@@ -83,21 +83,19 @@ function HeartbeatWave({ alive, lineId }: { alive: boolean; lineId: string }) {
         <polyline
           points={points}
           fill="none"
-          stroke={alive ? 'rgba(136, 221, 255, 0.95)' : 'rgba(79, 45, 130, 0.9)'}
-          strokeWidth={alive ? '4.2' : '3'}
+          stroke={alive ? 'rgba(109, 204, 245, 0.18)' : 'rgba(79, 45, 130, 0.82)'}
+          strokeWidth={alive ? '2.8' : '3'}
           strokeLinecap="round"
           strokeLinejoin="round"
-          filter={`url(#${lineId}-glow)`}
-          opacity={alive ? 0.95 : 0.82}
-        >
-          <animate attributeName="opacity" values={alive ? '0.72;1;0.72' : '0.68;0.82;0.68'} dur={alive ? '2.6s' : '5.4s'} repeatCount="indefinite" />
-        </polyline>
+          filter={alive ? undefined : `url(#${lineId}-line-glow)`}
+          opacity={alive ? 1 : 0.82}
+        />
 
         <polyline
           points={points}
           fill="none"
           stroke={`url(#${lineId}-gradient)`}
-          strokeWidth="2.2"
+          strokeWidth={alive ? '1.55' : '2.2'}
           strokeLinecap="round"
           strokeLinejoin="round"
         />
@@ -109,7 +107,7 @@ function HeartbeatWave({ alive, lineId }: { alive: boolean; lineId: string }) {
                 <mpath href={`#${lineId}-path`} />
               </animateMotion>
             </circle>
-            <circle r="4.4" fill="#e6fbff" filter={`url(#${lineId}-glow)`}>
+            <circle r="4.4" fill="#e6fbff" filter={`url(#${lineId}-dot-glow)`}>
               <animateMotion dur="3.8s" repeatCount="indefinite" rotate="auto">
                 <mpath href={`#${lineId}-path`} />
               </animateMotion>

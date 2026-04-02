@@ -6,6 +6,7 @@ import { ArrowLeft, ExternalLink, LocateFixed, Route, ShieldAlert } from 'lucide
 import { sosService, SOSEvent } from '../../services/sos.service';
 
 type RouteGeometry = GeoJSON.Feature<GeoJSON.LineString>;
+const LAST_RESPONDER_LOCATION_KEY = 'aurora:lastResponderLocation';
 
 type RouteLocationState = {
   alert?: SOSEvent;
@@ -32,6 +33,16 @@ function formatDuration(seconds: number | null) {
   const hours = Math.floor(minutes / 60);
   const remaining = minutes % 60;
   return remaining > 0 ? `${hours} hr ${remaining} min` : `${hours} hr`;
+}
+
+function getArrowBearing(geometry: RouteGeometry | null): number {
+  const coordinates = geometry?.geometry?.coordinates;
+  if (!coordinates || coordinates.length < 2) return 0;
+
+  const [startLng, startLat] = coordinates[0];
+  const [nextLng, nextLat] = coordinates[1];
+  const angleRadians = Math.atan2(nextLat - startLat, nextLng - startLng);
+  return (angleRadians * 180) / Math.PI + 90;
 }
 
 export default function SecurityRouteView() {
@@ -80,6 +91,18 @@ export default function SecurityRouteView() {
   }, [alert, id]);
 
   useEffect(() => {
+    const cachedLocation = window.sessionStorage.getItem(LAST_RESPONDER_LOCATION_KEY);
+    if (cachedLocation) {
+      try {
+        const parsed = JSON.parse(cachedLocation);
+        if (typeof parsed?.lat === 'number' && typeof parsed?.lng === 'number') {
+          setOrigin({ lat: parsed.lat, lng: parsed.lng });
+        }
+      } catch {
+        // Ignore malformed cache
+      }
+    }
+
     if (!('geolocation' in navigator)) {
       setRouteError('Live location is not available in this browser.');
       return;
@@ -87,10 +110,12 @@ export default function SecurityRouteView() {
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        setOrigin({
+        const nextOrigin = {
           lat: position.coords.latitude,
           lng: position.coords.longitude,
-        });
+        };
+        setOrigin(nextOrigin);
+        window.sessionStorage.setItem(LAST_RESPONDER_LOCATION_KEY, JSON.stringify(nextOrigin));
       },
       () => {
         setRouteError('Unable to access your current location for routing.');
@@ -115,11 +140,11 @@ export default function SecurityRouteView() {
     mapboxgl.accessToken = token;
     mapRef.current = new mapboxgl.Map({
       container: mapContainerRef.current,
-      style: 'mapbox://styles/mapbox/navigation-night-v1',
+      style: 'mapbox://styles/mapbox/satellite-streets-v12',
       center: destination ? [destination.lng, destination.lat] : [77.5946, 12.9716],
       zoom: destination ? 14 : 11,
-      pitch: 50,
-      bearing: -15,
+      pitch: 58,
+      bearing: -22,
       antialias: true,
     });
 
@@ -202,6 +227,7 @@ export default function SecurityRouteView() {
     const sourceId = 'aurora-route';
     const haloLayerId = 'aurora-route-halo';
     const lineLayerId = 'aurora-route-line';
+    const arrowBearing = getArrowBearing(routeGeometry);
 
     if (map.getSource(sourceId)) {
       (map.getSource(sourceId) as mapboxgl.GeoJSONSource).setData(routeGeometry);
@@ -218,10 +244,10 @@ export default function SecurityRouteView() {
         type: 'line',
         source: sourceId,
         paint: {
-          'line-color': '#7dd3fc',
-          'line-width': 10,
-          'line-opacity': 0.24,
-          'line-blur': 1.5,
+          'line-color': '#80e3ff',
+          'line-width': 14,
+          'line-opacity': 0.34,
+          'line-blur': 2.4,
         },
       });
     }
@@ -232,9 +258,9 @@ export default function SecurityRouteView() {
         type: 'line',
         source: sourceId,
         paint: {
-          'line-color': '#8de3ff',
-          'line-width': 5,
-          'line-opacity': 0.95,
+          'line-color': '#e8fbff',
+          'line-width': 7,
+          'line-opacity': 0.98,
         },
       });
     }
@@ -242,22 +268,37 @@ export default function SecurityRouteView() {
     markersRef.current.forEach((marker) => marker.remove());
     markersRef.current = [];
 
-    const makeMarker = (color: string, label: string) => {
+    const makeArrowMarker = (bearing: number) => {
       const el = document.createElement('div');
-      el.className = 'flex h-11 w-11 items-center justify-center rounded-full border-4 border-white text-xs font-bold text-white shadow-[0_0_28px_rgba(0,0,0,0.45)]';
-      el.style.background = color;
-      el.textContent = label;
+      el.className = 'relative h-14 w-14';
+      el.innerHTML = `
+        <div style="position:absolute;inset:0;border-radius:9999px;background:radial-gradient(circle, rgba(125,227,255,0.35), rgba(14,165,233,0.05));filter:blur(1px);"></div>
+        <div style="position:absolute;left:50%;top:50%;width:0;height:0;transform:translate(-50%,-50%) rotate(${bearing}deg);">
+          <div style="width:0;height:0;border-left:13px solid transparent;border-right:13px solid transparent;border-bottom:26px solid #e6fbff;filter:drop-shadow(0 0 12px rgba(136,221,255,0.85));"></div>
+          <div style="position:absolute;left:-4px;top:18px;width:8px;height:8px;border-radius:9999px;background:#0ea5e9;"></div>
+        </div>
+      `;
+      return el;
+    };
+
+    const makeSosMarker = () => {
+      const el = document.createElement('div');
+      el.className = 'relative flex h-14 w-14 items-center justify-center';
+      el.innerHTML = `
+        <div style="position:absolute;inset:6px;border-radius:9999px;background:rgba(239,68,68,0.18);box-shadow:0 0 0 10px rgba(239,68,68,0.08), 0 0 26px rgba(251,113,133,0.45);"></div>
+        <div style="position:absolute;inset:13px;border-radius:9999px;background:linear-gradient(135deg,#ef4444,#fb7185);border:3px solid white;display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:12px;">SOS</div>
+      `;
       return el;
     };
 
     markersRef.current.push(
-      new mapboxgl.Marker({ element: makeMarker('linear-gradient(135deg,#0ea5e9,#38bdf8)', 'You') })
+      new mapboxgl.Marker({ element: makeArrowMarker(arrowBearing), rotationAlignment: 'map' })
         .setLngLat([origin.lng, origin.lat])
         .addTo(map)
     );
 
     markersRef.current.push(
-      new mapboxgl.Marker({ element: makeMarker('linear-gradient(135deg,#ef4444,#fb7185)', 'SOS') })
+      new mapboxgl.Marker({ element: makeSosMarker() })
         .setLngLat([destination.lng, destination.lat])
         .addTo(map)
     );
