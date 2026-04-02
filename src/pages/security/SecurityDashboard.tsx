@@ -212,6 +212,7 @@ function AlertList({
 function BeaconStatusModal({
   beacons,
   now,
+  forcedDeadIds,
   open,
   onClose,
   onRefresh,
@@ -221,6 +222,7 @@ function BeaconStatusModal({
 }: {
   beacons: BeaconStatus[];
   now: number;
+  forcedDeadIds: string[];
   open: boolean;
   onClose: () => void;
   onRefresh: () => void;
@@ -266,7 +268,7 @@ function BeaconStatusModal({
             <div className="overflow-y-auto pr-1">
               <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
               {beacons.map((beacon) => {
-                const alive = isBeaconAlive(beacon, now);
+                const alive = !forcedDeadIds.includes(beacon.id) && isBeaconAlive(beacon, now);
 
                 return (
                   <div
@@ -352,6 +354,7 @@ export default function SecurityDashboard() {
   const [checkingBeaconId, setCheckingBeaconId] = useState<string | null>(null);
   const [manualCheckToast, setManualCheckToast] = useState<string | null>(null);
   const [beaconWarning, setBeaconWarning] = useState<BeaconWarningToast | null>(null);
+  const [forcedDeadIds, setForcedDeadIds] = useState<string[]>([]);
   const [emergencyConfirm, setEmergencyConfirm] = useState<null | 'fire' | 'ambulance' | 'police'>(null);
   const [now, setNow] = useState(Date.now());
   const navigate = useNavigate();
@@ -396,6 +399,10 @@ export default function SecurityDashboard() {
   };
 
   const upsertBeacon = (incoming: BeaconStatus) => {
+    if (incoming.is_online) {
+      setForcedDeadIds((prev) => prev.filter((id) => id !== incoming.id));
+    }
+
     setBeacons((prev) => {
       const idx = prev.findIndex((beacon) => beacon.id === incoming.id);
       if (idx === -1) return [...prev, incoming];
@@ -422,6 +429,7 @@ export default function SecurityDashboard() {
     try {
       const statuses = await beaconService.getBeaconStatuses();
       setBeacons(statuses);
+      setForcedDeadIds((prev) => prev.filter((id) => !statuses.some((status) => status.id === id && status.is_online)));
     } catch (error) {
       console.error('Failed to load beacons:', error);
     } finally {
@@ -458,6 +466,17 @@ export default function SecurityDashboard() {
       }
 
       if (!confirmed) {
+        setForcedDeadIds((prev) => (prev.includes(_beaconId) ? prev : [...prev, _beaconId]));
+        setBeacons((prev) =>
+          prev.map((beacon) =>
+            beacon.id === _beaconId
+              ? {
+                  ...beacon,
+                  last_heartbeat_at: null,
+                }
+              : beacon
+          )
+        );
         setManualCheckToast(`No fresh response received from ${requestSnapshot.name} yet.`);
       }
     } catch (error) {
@@ -732,6 +751,7 @@ export default function SecurityDashboard() {
       <BeaconStatusModal
         beacons={sortedBeacons}
         now={now}
+        forcedDeadIds={forcedDeadIds}
         open={showBeaconStatus}
         onClose={() => setShowBeaconStatus(false)}
         onRefresh={loadBeacons}
