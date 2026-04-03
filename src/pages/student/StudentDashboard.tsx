@@ -79,6 +79,7 @@ export default function StudentDashboard() {
   const manualValidationDismissUntilRef = useRef(0);
   const autoSOSCooldownUntilRef = useRef(0);
   const AUTO_SOS_REENTRY_COOLDOWN_MS = 25000;
+  const MANUAL_VALIDATION_RECHECK_MS = 3500;
   const attachInputRef = useRef<HTMLInputElement | null>(null);
   const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -1470,7 +1471,7 @@ export default function StudentDashboard() {
         snapshot={motionValidation}
         maxDurationMs={hybridMotionAnalyzerRef.current?.getConfig().validationWindowMs ?? 4000}
         onSendNow={() => confirmAIValidation(true)}
-        onDismiss={() => dismissAIValidation(undefined, 'rejected', 8000)}
+        onDismiss={() => dismissAIValidation(undefined, 'held', MANUAL_VALIDATION_RECHECK_MS)}
       />
 
       {chatOpen && (
