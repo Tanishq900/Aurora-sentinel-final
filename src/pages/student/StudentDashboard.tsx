@@ -88,8 +88,8 @@ export default function StudentDashboard() {
   const [chatDraft, setChatDraft] = useState('');
   const navigate = useNavigate();
 
-  const dismissAIValidation = (timestamp?: number) => {
-    hybridMotionAnalyzerRef.current?.dismiss(timestamp ?? Date.now());
+  const dismissAIValidation = (timestamp?: number, mode: 'rejected' | 'held' = 'rejected') => {
+    hybridMotionAnalyzerRef.current?.dismiss(mode, timestamp ?? Date.now());
     setAIValidationOpen(false);
     setMotionValidation(null);
   };
@@ -113,7 +113,10 @@ export default function StudentDashboard() {
       return true;
     }
 
-    dismissAIValidation();
+    dismissAIValidation(
+      undefined,
+      latestSnapshot.motion.validatedDanger ? 'held' : 'rejected'
+    );
     return false;
   };
 
@@ -730,7 +733,7 @@ export default function StudentDashboard() {
                   if (snapshot.decision.validatedDanger) {
                     confirmAIValidation();
                   } else {
-                    dismissAIValidation(snapshot.lastUpdatedAt);
+                    dismissAIValidation(snapshot.lastUpdatedAt, 'rejected');
                   }
                 }
               }

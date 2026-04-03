@@ -5,12 +5,15 @@ export type MotionClassification = 'drop-like' | 'running-like' | 'abnormal' | '
 export interface HybridMotionConfig {
   sampleIntervalMs: number;
   validationWindowMs: number;
-  cooldownMs: number;
+  rejectionCooldownMs: number;
+  holdCooldownMs: number;
   spikeDeltaThreshold: number;
   minimumMotionThreshold: number;
+  sustainedTriggerThreshold: number;
   highMotionThreshold: number;
   dropAverageThreshold: number;
   runningVarianceThreshold: number;
+  abnormalAverageThreshold: number;
   abnormalVarianceThreshold: number;
   abnormalMaxThreshold: number;
   abnormalSpikeCountThreshold: number;
@@ -64,16 +67,19 @@ export interface ValidationSnapshot {
 export const DEFAULT_HYBRID_MOTION_CONFIG: HybridMotionConfig = {
   sampleIntervalMs: 100,
   validationWindowMs: 4000,
-  cooldownMs: 7000,
-  spikeDeltaThreshold: 0.2,
+  rejectionCooldownMs: 5000,
+  holdCooldownMs: 1200,
+  spikeDeltaThreshold: 0.12,
   minimumMotionThreshold: 0.08,
-  highMotionThreshold: 0.65,
+  sustainedTriggerThreshold: 0.16,
+  highMotionThreshold: 0.45,
   dropAverageThreshold: 0.12,
   runningVarianceThreshold: 0.01,
-  abnormalVarianceThreshold: 0.045,
-  abnormalMaxThreshold: 0.78,
-  abnormalSpikeCountThreshold: 3,
-  earlyConfirmConfidence: 0.85,
+  abnormalAverageThreshold: 0.16,
+  abnormalVarianceThreshold: 0.018,
+  abnormalMaxThreshold: 0.32,
+  abnormalSpikeCountThreshold: 2,
+  earlyConfirmConfidence: 0.72,
   earlyRejectConfidence: 0.82,
 };
 
@@ -231,19 +237,22 @@ export function classifyMotionWindow(
   }
 
   const varianceScore = clamp(features.variance / Math.max(config.abnormalVarianceThreshold, 0.001));
+  const averageScore = clamp(features.average / Math.max(config.abnormalAverageThreshold, 0.001));
   const maxScore = clamp(features.max / Math.max(config.abnormalMaxThreshold, 0.001));
   const spikeScore = clamp(features.spikeCount / Math.max(config.abnormalSpikeCountThreshold, 1));
   const rangeScore = clamp(features.range / Math.max(config.highMotionThreshold, 0.001));
   const abnormalConfidence = clamp(
-    varianceScore * 0.4 +
-      maxScore * 0.25 +
-      spikeScore * 0.2 +
+    varianceScore * 0.3 +
+      averageScore * 0.2 +
+      maxScore * 0.2 +
+      spikeScore * 0.15 +
       rangeScore * 0.15
   );
 
   if (
     features.variance >= config.abnormalVarianceThreshold ||
-    (features.max >= config.abnormalMaxThreshold && features.spikeCount >= config.abnormalSpikeCountThreshold)
+    (features.max >= config.abnormalMaxThreshold && features.spikeCount >= config.abnormalSpikeCountThreshold) ||
+    (features.average >= config.abnormalAverageThreshold && features.range >= config.sustainedTriggerThreshold)
   ) {
     return {
       classification: 'abnormal',
@@ -348,9 +357,10 @@ export class HybridMotionAnalyzer {
     this.rollingBuffer.clear();
   }
 
-  dismiss(now = Date.now()): void {
+  dismiss(mode: 'rejected' | 'held' = 'rejected', now = Date.now()): void {
     this.validationStartTime = null;
-    this.cooldownUntil = now + this.config.cooldownMs;
+    this.cooldownUntil =
+      now + (mode === 'held' ? this.config.holdCooldownMs : this.config.rejectionCooldownMs);
     this.rollingBuffer.clear();
   }
 
@@ -375,8 +385,11 @@ export class HybridMotionAnalyzer {
     const motion = getMotionValue(motionData);
     const spike = detectMotionSpike(motion, this.lastMotion, this.config);
     const shouldSample = this.lastSampleAt === 0 || now - this.lastSampleAt >= this.config.sampleIntervalMs;
+    const sustainedTrigger =
+      motion >= this.config.sustainedTriggerThreshold &&
+      this.lastMotion >= this.config.minimumMotionThreshold;
 
-    if (!this.isValidating() && spike.detected && !this.isCoolingDown(now)) {
+    if (!this.isValidating() && !this.isCoolingDown(now) && (spike.detected || sustainedTrigger)) {
       this.beginValidation(now);
     }
 
