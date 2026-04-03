@@ -14,6 +14,10 @@ function getStatusLabel(snapshot: ValidationSnapshot | null): string {
     return 'Listening for more motion data...';
   }
 
+  if (snapshot.cooldownRemainingMs > 0) {
+    return `Abnormal motion detected. Rechecking in ${(snapshot.cooldownRemainingMs / 1000).toFixed(1)}s.`;
+  }
+
   if (snapshot.decision.shouldEarlyConfirm) {
     return 'High-confidence event detected. Escalating immediately.';
   }
@@ -84,6 +88,12 @@ export default function AIValidationModal({
           <div className="rounded-xl border border-border/40 bg-secondary/25 px-4 py-3 text-sm text-muted-foreground">
             {getStatusLabel(snapshot)}
           </div>
+
+          {snapshot?.cooldownRemainingMs ? (
+            <div className="rounded-xl border border-amber-400/25 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
+              Retry cooldown: {(snapshot.cooldownRemainingMs / 1000).toFixed(1)}s
+            </div>
+          ) : null}
 
           <div className="flex gap-3">
             <button

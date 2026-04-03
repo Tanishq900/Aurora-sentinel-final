@@ -191,23 +191,12 @@ export function evaluateAutoSOSDecision(snapshot: RiskSnapshot): AutoSOSDecision
   const hasSupportSignal = supportSignals.length > 0;
   const validatedDanger = snapshot.motion.validatedDanger;
   const confidence = snapshot.motion.confidence;
-  const highTotalRisk = snapshot.total >= 50;
-
   if (!validatedDanger) {
     return {
       shouldTrigger: false,
       supportSignals,
       confidence,
       reason: 'motion event not validated as dangerous',
-    };
-  }
-
-  if (!highTotalRisk && !veryHighConfidence) {
-    return {
-      shouldTrigger: false,
-      supportSignals,
-      confidence,
-      reason: 'validated motion lacks enough total risk to escalate',
     };
   }
 
@@ -336,9 +325,9 @@ export function calculateTotalRisk(
 /**
  * Check if auto-SOS should be triggered
  */
-export function shouldTriggerAutoSOS(totalRisk: number, _presentationMode?: boolean): boolean {
+export function shouldTriggerAutoSOS(totalRisk: number, _presentationMode?: boolean, force = false): boolean {
   const threshold = 50;
-  if (totalRisk <= threshold) {
+  if (!force && totalRisk <= threshold) {
     return false;
   }
 

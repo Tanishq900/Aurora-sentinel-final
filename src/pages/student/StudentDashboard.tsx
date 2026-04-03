@@ -95,6 +95,23 @@ export default function StudentDashboard() {
     setMotionValidation(null);
   };
 
+  const holdAIValidation = (snapshot: ValidationSnapshot, timestamp?: number) => {
+    const analyzer = hybridMotionAnalyzerRef.current;
+    if (!analyzer) return;
+
+    analyzer.dismiss('held', timestamp ?? snapshot.lastUpdatedAt);
+    const heldSnapshot: ValidationSnapshot = {
+      ...snapshot,
+      lastUpdatedAt: timestamp ?? snapshot.lastUpdatedAt,
+      cooldownRemainingMs: analyzer.getCooldownRemainingMs(timestamp ?? snapshot.lastUpdatedAt),
+    };
+    setMotionValidation(heldSnapshot);
+    setLastMotionValidation(heldSnapshot);
+    setAIValidationOpen(true);
+  };
+
+  const getLatestValidationSnapshot = () => motionValidation || lastMotionValidation;
+
   const confirmAIValidation = (manualOverride = false) => {
     setAIValidationOpen(false);
 
@@ -107,17 +124,19 @@ export default function StudentDashboard() {
     const latestPresentationMode = latestPresentationModeRef.current;
     const shouldTrigger =
       latestSnapshot.autoSOS.shouldTrigger &&
-      shouldTriggerAutoSOS(latestSnapshot.total, latestPresentationMode);
+      shouldTriggerAutoSOS(latestSnapshot.total, latestPresentationMode, true);
 
     if (shouldTrigger) {
       setAutoSOSTriggered(true);
       return true;
     }
 
-    dismissAIValidation(
-      undefined,
-      latestSnapshot.motion.validatedDanger ? 'held' : 'rejected'
-    );
+    const latestValidationSnapshot = getLatestValidationSnapshot();
+    if (latestSnapshot.motion.validatedDanger && latestValidationSnapshot) {
+      holdAIValidation(latestValidationSnapshot);
+    } else {
+      dismissAIValidation(undefined, 'rejected');
+    }
     return false;
   };
 
@@ -619,6 +638,20 @@ export default function StudentDashboard() {
   useEffect(() => {
     latestAutoSOSTriggeredRef.current = autoSOSTriggered;
   }, [autoSOSTriggered]);
+
+  useEffect(() => {
+    if (!aiValidationOpen || !motionValidation || motionValidation.cooldownRemainingMs <= 0) {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      const remaining = hybridMotionAnalyzerRef.current?.getCooldownRemainingMs() ?? 0;
+      setMotionValidation((prev) => (prev ? { ...prev, cooldownRemainingMs: remaining } : prev));
+      setLastMotionValidation((prev) => (prev ? { ...prev, cooldownRemainingMs: remaining } : prev));
+    }, 200);
+
+    return () => clearInterval(interval);
+  }, [aiValidationOpen, motionValidation]);
 
   useEffect(() => {
     if (!user?.id) return;
