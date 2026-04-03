@@ -72,7 +72,7 @@ export interface ValidationSnapshot {
 export const DEFAULT_HYBRID_MOTION_CONFIG: HybridMotionConfig = {
   sampleIntervalMs: 100,
   validationWindowMs: 4000,
-  immobilityWindowMs: 6000,
+  immobilityWindowMs: 10000,
   rejectionCooldownMs: 5000,
   holdCooldownMs: 1200,
   spikeDeltaThreshold: 0.12,

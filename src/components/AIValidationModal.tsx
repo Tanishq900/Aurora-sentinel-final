@@ -40,7 +40,7 @@ export default function AIValidationModal({
 
   const elapsedMs = snapshot?.elapsedMs ?? 0;
   const phaseDurationMs =
-    snapshot?.phase === 'immobility-watch' ? Math.max(maxDurationMs, 6000) : maxDurationMs;
+    snapshot?.phase === 'immobility-watch' ? Math.max(maxDurationMs, 10000) : maxDurationMs;
   const progress = Math.max(0, Math.min(100, (elapsedMs / phaseDurationMs) * 100));
   const confidence = Math.round((snapshot?.decision.confidence ?? 0) * 100);
   const classification = snapshot?.decision.classification ?? 'inconclusive';

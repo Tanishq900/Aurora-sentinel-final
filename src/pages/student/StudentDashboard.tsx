@@ -49,6 +49,7 @@ export default function StudentDashboard() {
       lng: number;
       matchedZone?: { id?: string; name?: string; type: 'high' | 'low' };
       isNormalZone?: boolean;
+      zonesLoaded?: boolean;
     } | null)
   >(null);
   const [riskZones, setRiskZones] = useState<RiskZone[]>([]);
@@ -77,6 +78,7 @@ export default function StudentDashboard() {
   const latestUserLocationRef = useRef(userLocation);
   const manualValidationDismissUntilRef = useRef(0);
   const autoSOSCooldownUntilRef = useRef(0);
+  const AUTO_SOS_REENTRY_COOLDOWN_MS = 25000;
   const attachInputRef = useRef<HTMLInputElement | null>(null);
   const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -130,7 +132,7 @@ export default function StudentDashboard() {
   ) => {
     if (manualOverride) {
       setAIValidationOpen(false);
-      autoSOSCooldownUntilRef.current = Date.now() + 15000;
+      autoSOSCooldownUntilRef.current = Date.now() + AUTO_SOS_REENTRY_COOLDOWN_MS;
       hybridMotionAnalyzerRef.current?.dismiss('held', Date.now());
       setAutoSOSTriggered(true);
       return true;
@@ -157,7 +159,7 @@ export default function StudentDashboard() {
 
     if (shouldTrigger) {
       setAIValidationOpen(false);
-      autoSOSCooldownUntilRef.current = Date.now() + 15000;
+      autoSOSCooldownUntilRef.current = Date.now() + AUTO_SOS_REENTRY_COOLDOWN_MS;
       hybridMotionAnalyzerRef.current?.dismiss('held', Date.now());
       setMotionValidation(null);
       setAutoSOSTriggered(true);
@@ -594,22 +596,41 @@ export default function StudentDashboard() {
 
   useEffect(() => {
     if (!userLocation || !Number.isFinite(userLocation.lat) || !Number.isFinite(userLocation.lng)) return;
-    if (riskZones.length === 0) return;
+    if (riskZones.length === 0) {
+      if (!userLocation.zonesLoaded) return;
+
+      setUserLocation({
+        lat: userLocation.lat,
+        lng: userLocation.lng,
+        matchedZone: undefined,
+        isNormalZone: undefined,
+        zonesLoaded: false,
+      });
+      return;
+    }
 
     const matched = matchZoneForLocation({ lat: userLocation.lat, lng: userLocation.lng });
     const nextMatchedId = matched?.id || null;
     const prevMatchedId = userLocation.matchedZone?.id || null;
+    const nextIsNormal = !matched;
 
-    if (nextMatchedId === prevMatchedId) return;
+    if (
+      nextMatchedId === prevMatchedId &&
+      userLocation.isNormalZone === nextIsNormal &&
+      userLocation.zonesLoaded
+    ) {
+      return;
+    }
 
     setUserLocation({
       lat: userLocation.lat,
       lng: userLocation.lng,
       matchedZone: matched ? { id: matched.id, name: matched.name, type: matched.type } : undefined,
-      isNormalZone: !matched,
+      isNormalZone: nextIsNormal,
+      zonesLoaded: true,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [riskZones]);
+  }, [riskZones, userLocation?.lat, userLocation?.lng]);
 
   const isPointInRing = (point: { lat: number; lng: number }, ring: number[][]) => {
     const x = point.lng;
@@ -644,7 +665,8 @@ export default function StudentDashboard() {
     setUserLocation({
       ...loc,
       matchedZone: matched ? { id: matched.id, name: matched.name, type: matched.type } : undefined,
-      isNormalZone: !matched,
+      isNormalZone: riskZones.length > 0 ? !matched : undefined,
+      zonesLoaded: riskZones.length > 0,
     });
   };
 
@@ -1033,13 +1055,13 @@ export default function StudentDashboard() {
               onSOSTriggered={() => {
                 loadSOSHistory();
                 setAutoSOSTriggered(false); // Reset after SOS is sent
-                autoSOSCooldownUntilRef.current = Date.now() + 15000;
+                autoSOSCooldownUntilRef.current = Date.now() + AUTO_SOS_REENTRY_COOLDOWN_MS;
                 dismissAIValidation();
               }}
               triggerType={autoSOSTriggered ? 'ai' : undefined}
               onCancelAuto={() => {
                 setAutoSOSTriggered(false); // Reset if user cancels
-                autoSOSCooldownUntilRef.current = Date.now() + 15000;
+                autoSOSCooldownUntilRef.current = Date.now() + AUTO_SOS_REENTRY_COOLDOWN_MS;
                 dismissAIValidation();
               }}
             />
