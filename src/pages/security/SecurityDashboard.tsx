@@ -22,15 +22,20 @@ const ROLE_ORDER: Record<BeaconStatus['node_role'], number> = {
   gateway: 3,
 };
 
-interface BeaconWarningToast {
+interface BeaconAutoAlertToast {
   beacon_id: string;
   beacon_name: string;
   node_role: BeaconStatus['node_role'];
-  temperature_c: number;
-  smoke_level: number;
+  ingress_beacon_id?: string;
+  ingress_beacon_name?: string;
+  ingress_node_role?: BeaconStatus['node_role'];
+  temperature_c: number | null;
+  smoke_level: number | null;
   message: string;
   recorded_at: string;
   location?: BeaconStatus['location'];
+  source?: string;
+  type?: string;
 }
 
 function isBeaconAlive(beacon: BeaconStatus, now: number): boolean {
@@ -353,7 +358,7 @@ export default function SecurityDashboard() {
   const [showBeaconStatus, setShowBeaconStatus] = useState(false);
   const [checkingBeaconId, setCheckingBeaconId] = useState<string | null>(null);
   const [manualCheckToast, setManualCheckToast] = useState<string | null>(null);
-  const [beaconWarning, setBeaconWarning] = useState<BeaconWarningToast | null>(null);
+  const [beaconAutoAlert, setBeaconAutoAlert] = useState<BeaconAutoAlertToast | null>(null);
   const [forcedDeadIds, setForcedDeadIds] = useState<string[]>([]);
   const [emergencyConfirm, setEmergencyConfirm] = useState<null | 'fire' | 'ambulance' | 'police'>(null);
   const [now, setNow] = useState(Date.now());
@@ -549,8 +554,8 @@ export default function SecurityDashboard() {
     socket.on('sos-updated', upsertAlert);
     socket.on('beacon:heartbeat', (status: BeaconStatus) => upsertBeacon(status));
     socket.on('beacon:status', (status: BeaconStatus) => upsertBeacon(status));
-    socket.on('beacon:warning', (warning: BeaconWarningToast) => {
-      setBeaconWarning(warning);
+    socket.on('beacon:auto-alert', (warning: BeaconAutoAlertToast) => {
+      setBeaconAutoAlert(warning);
       playNotification();
     });
 
@@ -560,7 +565,7 @@ export default function SecurityDashboard() {
       socket.off('sos-updated');
       socket.off('beacon:heartbeat');
       socket.off('beacon:status');
-      socket.off('beacon:warning');
+      socket.off('beacon:auto-alert');
       socket.disconnect();
     };
   }, [user, navigate]);
@@ -577,10 +582,10 @@ export default function SecurityDashboard() {
   }, [manualCheckToast]);
 
   useEffect(() => {
-    if (!beaconWarning) return;
-    const timeout = window.setTimeout(() => setBeaconWarning(null), 7000);
+    if (!beaconAutoAlert) return;
+    const timeout = window.setTimeout(() => setBeaconAutoAlert(null), 10000);
     return () => window.clearTimeout(timeout);
-  }, [beaconWarning]);
+  }, [beaconAutoAlert]);
 
   const emergencyConfig = {
     fire: {
@@ -790,25 +795,25 @@ export default function SecurityDashboard() {
         </div>
       ) : null}
 
-      {beaconWarning ? (
-        <div className="fixed right-6 top-6 z-[100000] w-full max-w-sm rounded-2xl border border-amber-400/35 bg-black/90 p-4 shadow-[0_20px_60px_rgba(0,0,0,0.55)] backdrop-blur-md">
+      {beaconAutoAlert ? (
+        <div className="fixed right-6 top-6 z-[100001] w-full max-w-sm rounded-2xl border border-danger/35 bg-black/92 p-4 shadow-[0_20px_60px_rgba(0,0,0,0.55)] backdrop-blur-md">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <div className="text-xs uppercase tracking-[0.22em] text-amber-300">Beacon Warning</div>
-              <div className="mt-1 text-lg font-semibold text-foreground">{beaconWarning.message}</div>
+              <div className="text-xs uppercase tracking-[0.22em] text-danger">Main Beacon Auto Alert</div>
+              <div className="mt-1 text-lg font-semibold text-foreground">{beaconAutoAlert.message}</div>
             </div>
             <button
               type="button"
-              onClick={() => setBeaconWarning(null)}
+              onClick={() => setBeaconAutoAlert(null)}
               className="rounded-lg border border-border/50 bg-secondary/50 p-2 text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
             >
               <X className="h-4 w-4" />
             </button>
           </div>
           <div className="mt-3 text-sm text-muted-foreground">
-            <div>Temperature: {beaconWarning.temperature_c.toFixed(1)} C</div>
-            <div>Smoke: {beaconWarning.smoke_level.toFixed(0)}</div>
-            <div>{beaconWarning.beacon_name}</div>
+            <div>Temperature: {typeof beaconAutoAlert.temperature_c === 'number' ? `${beaconAutoAlert.temperature_c.toFixed(1)} C` : 'N/A'}</div>
+            <div>Smoke: {typeof beaconAutoAlert.smoke_level === 'number' ? beaconAutoAlert.smoke_level.toFixed(0) : 'N/A'}</div>
+            <div>{beaconAutoAlert.beacon_name}</div>
           </div>
         </div>
       ) : null}
