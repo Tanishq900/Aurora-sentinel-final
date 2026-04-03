@@ -80,6 +80,7 @@ export default function StudentDashboard() {
   const autoSOSCooldownUntilRef = useRef(0);
   const AUTO_SOS_REENTRY_COOLDOWN_MS = 25000;
   const MANUAL_VALIDATION_RECHECK_MS = 3500;
+  const HELD_DECISION_RESET_MS = 2200;
   const attachInputRef = useRef<HTMLInputElement | null>(null);
   const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -123,6 +124,40 @@ export default function StudentDashboard() {
     setLastMotionValidation(heldSnapshot);
     setAIValidationOpen(true);
   };
+
+  useEffect(() => {
+    if (!motionValidation || motionValidation.cooldownRemainingMs <= 0) {
+      return;
+    }
+
+    const classification = motionValidation.decision.classification;
+    if (classification === 'inconclusive' || classification === 'immobile-after-impact') {
+      return;
+    }
+
+    const scheduledAt = motionValidation.lastUpdatedAt;
+
+    const timeout = setTimeout(() => {
+      setMotionValidation((prev) => {
+        if (!prev) return prev;
+        if (prev.lastUpdatedAt !== scheduledAt) return prev;
+
+        return {
+          ...prev,
+          decision: {
+            classification: 'inconclusive',
+            validatedDanger: false,
+            confidence: Math.min(prev.decision.confidence, 0.35),
+            reason: 'rechecking motion for a fresh decision',
+            shouldEarlyConfirm: false,
+            shouldEarlyReject: false,
+          },
+        };
+      });
+    }, HELD_DECISION_RESET_MS);
+
+    return () => clearTimeout(timeout);
+  }, [motionValidation]);
 
   const getLatestValidationSnapshot = () => motionValidation || lastMotionValidation;
 
