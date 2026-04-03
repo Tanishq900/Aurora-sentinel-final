@@ -130,12 +130,24 @@ export default function StudentDashboard() {
     validationSnapshot?: ValidationSnapshot,
     currentMotionData?: MotionData
   ) => {
+    const now = Date.now();
+
     if (manualOverride) {
       setAIValidationOpen(false);
-      autoSOSCooldownUntilRef.current = Date.now() + AUTO_SOS_REENTRY_COOLDOWN_MS;
-      hybridMotionAnalyzerRef.current?.dismiss('held', Date.now());
+      autoSOSCooldownUntilRef.current = now + AUTO_SOS_REENTRY_COOLDOWN_MS;
+      hybridMotionAnalyzerRef.current?.dismiss('held', now);
       setAutoSOSTriggered(true);
       return true;
+    }
+
+    if (now < autoSOSCooldownUntilRef.current) {
+      const latestValidationSnapshot = getLatestValidationSnapshot();
+      if (latestValidationSnapshot) {
+        holdAIValidation(latestValidationSnapshot, now);
+      } else {
+        dismissAIValidation(now, 'held');
+      }
+      return false;
     }
 
     const latestSnapshot = validationSnapshot
@@ -155,12 +167,12 @@ export default function StudentDashboard() {
     const latestPresentationMode = latestPresentationModeRef.current;
     const shouldTrigger =
       latestSnapshot.autoSOS.shouldTrigger &&
-      shouldTriggerAutoSOS(latestSnapshot.total, latestPresentationMode, true, true);
+      shouldTriggerAutoSOS(latestSnapshot.total, latestPresentationMode, true, false);
 
     if (shouldTrigger) {
       setAIValidationOpen(false);
-      autoSOSCooldownUntilRef.current = Date.now() + AUTO_SOS_REENTRY_COOLDOWN_MS;
-      hybridMotionAnalyzerRef.current?.dismiss('held', Date.now());
+      autoSOSCooldownUntilRef.current = now + AUTO_SOS_REENTRY_COOLDOWN_MS;
+      hybridMotionAnalyzerRef.current?.dismiss('held', now);
       setMotionValidation(null);
       setAutoSOSTriggered(true);
       return true;
