@@ -131,6 +131,25 @@ export default function StudentDashboard() {
     setAIValidationOpen(true);
   };
 
+  const resetValidationToInconclusive = () => {
+    setMotionValidation(null);
+    setLastMotionValidation((prev) => {
+      if (!prev) return null;
+
+      return {
+        ...prev,
+        decision: {
+          classification: 'inconclusive',
+          validatedDanger: false,
+          confidence: 0.2,
+          reason: 'rechecking motion after SOS cancellation',
+          shouldEarlyConfirm: false,
+          shouldEarlyReject: false,
+        },
+      };
+    });
+  };
+
   useEffect(() => {
     if (!motionValidation) {
       return;
@@ -1120,7 +1139,7 @@ export default function StudentDashboard() {
                 setAutoSOSTriggered(false); // Reset if user cancels
                 autoSOSCooldownUntilRef.current = Date.now() + AUTO_SOS_REENTRY_COOLDOWN_MS;
                 dismissAIValidation();
-                setLastMotionValidation(null);
+                resetValidationToInconclusive();
               }}
             />
             <button
