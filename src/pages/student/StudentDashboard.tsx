@@ -70,6 +70,9 @@ export default function StudentDashboard() {
   const latestAudioRef = useRef<AudioData>(audioData);
   const latestMotionRef = useRef<MotionData>(motionData);
   const latestRiskTotalRef = useRef<number>(riskSnapshot.total);
+  const latestRiskSnapshotRef = useRef(riskSnapshot);
+  const latestPresentationModeRef = useRef(presentationMode);
+  const latestAutoSOSTriggeredRef = useRef(autoSOSTriggered);
   const attachInputRef = useRef<HTMLInputElement | null>(null);
   const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -94,9 +97,16 @@ export default function StudentDashboard() {
   const confirmAIValidation = (manualOverride = false) => {
     setAIValidationOpen(false);
 
-    const shouldTrigger = manualOverride
-      ? shouldTriggerAutoSOS(riskSnapshot.total, presentationMode)
-      : riskSnapshot.autoSOS.shouldTrigger && shouldTriggerAutoSOS(riskSnapshot.total, presentationMode);
+    if (manualOverride) {
+      setAutoSOSTriggered(true);
+      return true;
+    }
+
+    const latestSnapshot = latestRiskSnapshotRef.current;
+    const latestPresentationMode = latestPresentationModeRef.current;
+    const shouldTrigger =
+      latestSnapshot.autoSOS.shouldTrigger &&
+      shouldTriggerAutoSOS(latestSnapshot.total, latestPresentationMode);
 
     if (shouldTrigger) {
       setAutoSOSTriggered(true);
@@ -595,6 +605,18 @@ export default function StudentDashboard() {
   }, [riskSnapshot.total]);
 
   useEffect(() => {
+    latestRiskSnapshotRef.current = riskSnapshot;
+  }, [riskSnapshot]);
+
+  useEffect(() => {
+    latestPresentationModeRef.current = presentationMode;
+  }, [presentationMode]);
+
+  useEffect(() => {
+    latestAutoSOSTriggeredRef.current = autoSOSTriggered;
+  }, [autoSOSTriggered]);
+
+  useEffect(() => {
     if (!user?.id) return;
 
     const interval = setInterval(() => {
@@ -700,7 +722,7 @@ export default function StudentDashboard() {
               const { snapshot, isValidationComplete } = analyzer.ingestMotion(data);
               if (snapshot) {
                 setMotionValidation(snapshot);
-                if (!autoSOSTriggered) {
+                if (!latestAutoSOSTriggeredRef.current) {
                   setAIValidationOpen(true);
                 }
 
@@ -740,7 +762,7 @@ export default function StudentDashboard() {
     };
 
     initSensors();
-  }, [autoSOSTriggered, presentationMode, riskSnapshot.total]);
+  }, []);
 
   // Update audio sensor sensitivity when presentation mode changes
   useEffect(() => {
