@@ -80,7 +80,13 @@ export default function StudentDashboard() {
   const autoSOSCooldownUntilRef = useRef(0);
   const AUTO_SOS_REENTRY_COOLDOWN_MS = 25000;
   const MANUAL_VALIDATION_RECHECK_MS = 3500;
-  const HELD_DECISION_RESET_MS = 2200;
+  const DECISION_TTL_MS: Record<string, number> = {
+    abnormal: 2600,
+    'running-like': 1600,
+    'drop-like': 1800,
+    'immobile-after-impact': 4500,
+    inconclusive: 0,
+  };
   const attachInputRef = useRef<HTMLInputElement | null>(null);
   const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -126,12 +132,13 @@ export default function StudentDashboard() {
   };
 
   useEffect(() => {
-    if (!motionValidation || motionValidation.cooldownRemainingMs <= 0) {
+    if (!motionValidation) {
       return;
     }
 
     const classification = motionValidation.decision.classification;
-    if (classification === 'inconclusive' || classification === 'immobile-after-impact') {
+    const ttl = DECISION_TTL_MS[classification] ?? 0;
+    if (ttl <= 0) {
       return;
     }
 
@@ -147,14 +154,14 @@ export default function StudentDashboard() {
           decision: {
             classification: 'inconclusive',
             validatedDanger: false,
-            confidence: Math.min(prev.decision.confidence, 0.35),
+            confidence: Math.min(prev.decision.confidence, 0.3),
             reason: 'rechecking motion for a fresh decision',
             shouldEarlyConfirm: false,
             shouldEarlyReject: false,
           },
         };
       });
-    }, HELD_DECISION_RESET_MS);
+    }, ttl);
 
     return () => clearTimeout(timeout);
   }, [motionValidation]);
