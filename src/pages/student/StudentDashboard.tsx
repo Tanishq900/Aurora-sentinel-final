@@ -76,6 +76,7 @@ export default function StudentDashboard() {
   const latestAutoSOSTriggeredRef = useRef(autoSOSTriggered);
   const latestUserLocationRef = useRef(userLocation);
   const manualValidationDismissUntilRef = useRef(0);
+  const autoSOSCooldownUntilRef = useRef(0);
   const attachInputRef = useRef<HTMLInputElement | null>(null);
   const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -129,6 +130,8 @@ export default function StudentDashboard() {
   ) => {
     if (manualOverride) {
       setAIValidationOpen(false);
+      autoSOSCooldownUntilRef.current = Date.now() + 15000;
+      hybridMotionAnalyzerRef.current?.dismiss('held', Date.now());
       setAutoSOSTriggered(true);
       return true;
     }
@@ -154,6 +157,9 @@ export default function StudentDashboard() {
 
     if (shouldTrigger) {
       setAIValidationOpen(false);
+      autoSOSCooldownUntilRef.current = Date.now() + 15000;
+      hybridMotionAnalyzerRef.current?.dismiss('held', Date.now());
+      setMotionValidation(null);
       setAutoSOSTriggered(true);
       return true;
     }
@@ -793,7 +799,8 @@ export default function StudentDashboard() {
                 setLastMotionValidation(snapshot);
                 if (
                   !latestAutoSOSTriggeredRef.current &&
-                  Date.now() >= manualValidationDismissUntilRef.current
+                  Date.now() >= manualValidationDismissUntilRef.current &&
+                  Date.now() >= autoSOSCooldownUntilRef.current
                 ) {
                   setAIValidationOpen(true);
                 }
@@ -814,7 +821,8 @@ export default function StudentDashboard() {
                     holdAIValidation(snapshot, snapshot.lastUpdatedAt);
                   } else if (
                     snapshot.latestMotion >= analyzer.getConfig().sustainedTriggerThreshold &&
-                    Date.now() >= manualValidationDismissUntilRef.current
+                    Date.now() >= manualValidationDismissUntilRef.current &&
+                    Date.now() >= autoSOSCooldownUntilRef.current
                   ) {
                     analyzer.beginValidation(snapshot.lastUpdatedAt);
                     setAIValidationOpen(true);
@@ -1025,11 +1033,13 @@ export default function StudentDashboard() {
               onSOSTriggered={() => {
                 loadSOSHistory();
                 setAutoSOSTriggered(false); // Reset after SOS is sent
+                autoSOSCooldownUntilRef.current = Date.now() + 15000;
                 dismissAIValidation();
               }}
               triggerType={autoSOSTriggered ? 'ai' : undefined}
               onCancelAuto={() => {
                 setAutoSOSTriggered(false); // Reset if user cancels
+                autoSOSCooldownUntilRef.current = Date.now() + 15000;
                 dismissAIValidation();
               }}
             />
