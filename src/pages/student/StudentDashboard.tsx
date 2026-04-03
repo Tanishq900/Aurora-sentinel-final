@@ -172,6 +172,8 @@ export default function StudentDashboard() {
       setAIValidationOpen(false);
       autoSOSCooldownUntilRef.current = now + AUTO_SOS_REENTRY_COOLDOWN_MS;
       hybridMotionAnalyzerRef.current?.dismiss('held', now);
+      setMotionValidation(null);
+      setLastMotionValidation(null);
       setAutoSOSTriggered(true);
       return true;
     }
@@ -210,6 +212,7 @@ export default function StudentDashboard() {
       autoSOSCooldownUntilRef.current = now + AUTO_SOS_REENTRY_COOLDOWN_MS;
       hybridMotionAnalyzerRef.current?.dismiss('held', now);
       setMotionValidation(null);
+      setLastMotionValidation(null);
       setAutoSOSTriggered(true);
       return true;
     }
@@ -1103,12 +1106,14 @@ export default function StudentDashboard() {
                 setAutoSOSTriggered(false); // Reset after SOS is sent
                 autoSOSCooldownUntilRef.current = Date.now() + AUTO_SOS_REENTRY_COOLDOWN_MS;
                 dismissAIValidation();
+                setLastMotionValidation(null);
               }}
               triggerType={autoSOSTriggered ? 'ai' : undefined}
               onCancelAuto={() => {
                 setAutoSOSTriggered(false); // Reset if user cancels
                 autoSOSCooldownUntilRef.current = Date.now() + AUTO_SOS_REENTRY_COOLDOWN_MS;
                 dismissAIValidation();
+                setLastMotionValidation(null);
               }}
             />
             <button
