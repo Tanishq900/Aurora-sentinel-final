@@ -36,6 +36,7 @@ export default function StudentDashboard() {
     intensity: 0,
   });
   const [motionValidation, setMotionValidation] = useState<ValidationSnapshot | null>(null);
+  const [lastMotionValidation, setLastMotionValidation] = useState<ValidationSnapshot | null>(null);
   const [riskSnapshot, setRiskSnapshot] = useState(calculateTotalRisk(audioData, motionData));
   const [aiValidationOpen, setAIValidationOpen] = useState(false);
   const [showPresentationModal, setShowPresentationModal] = useState(false);
@@ -725,13 +726,24 @@ export default function StudentDashboard() {
               const { snapshot, isValidationComplete } = analyzer.ingestMotion(data);
               if (snapshot) {
                 setMotionValidation(snapshot);
+                setLastMotionValidation(snapshot);
                 if (!latestAutoSOSTriggeredRef.current) {
                   setAIValidationOpen(true);
                 }
 
                 if (isValidationComplete) {
                   if (snapshot.decision.validatedDanger) {
-                    confirmAIValidation();
+                    const triggered = confirmAIValidation();
+                    if (!triggered && snapshot.latestMotion >= analyzer.getConfig().sustainedTriggerThreshold) {
+                      analyzer.beginValidation(snapshot.lastUpdatedAt);
+                      setAIValidationOpen(true);
+                    }
+                  } else if (
+                    snapshot.decision.classification === 'inconclusive' &&
+                    snapshot.latestMotion >= analyzer.getConfig().sustainedTriggerThreshold
+                  ) {
+                    analyzer.beginValidation(snapshot.lastUpdatedAt);
+                    setAIValidationOpen(true);
                   } else {
                     dismissAIValidation(snapshot.lastUpdatedAt, 'rejected');
                   }
@@ -899,6 +911,7 @@ export default function StudentDashboard() {
     { name: 'Location', value: riskSnapshot.location.score, max: 20, color: riskSnapshot.location.score > 15 ? 'warning' : 'safe' },
     { name: 'Total', value: riskSnapshot.total, max: 100, color: riskSnapshot.level === 'high' ? 'danger' : riskSnapshot.level === 'medium' ? 'warning' : 'safe' },
   ];
+  const diagnosticsValidation = motionValidation || lastMotionValidation;
 
   return (
     <div className="min-h-screen bg-black p-6 relative">
@@ -992,10 +1005,12 @@ export default function StudentDashboard() {
                   <div className="text-xs uppercase tracking-wide text-muted-foreground">Motion Validation</div>
                   <div className="mt-2 flex items-center justify-between gap-3">
                     <span className="text-foreground font-semibold capitalize">
-                      {riskSnapshot.motion.classification}
+                      {diagnosticsValidation?.decision.classification || riskSnapshot.motion.classification}
                     </span>
                     <span className="text-sm text-muted-foreground">
-                      {Math.round(riskSnapshot.motion.confidence * 100)}% confidence
+                      {Math.round(
+                        ((diagnosticsValidation?.decision.confidence ?? riskSnapshot.motion.confidence) || 0) * 100
+                      )}% confidence
                     </span>
                   </div>
                   <div className="mt-2 text-sm text-muted-foreground">
@@ -1004,7 +1019,7 @@ export default function StudentDashboard() {
                     Effective: {riskSnapshot.motion.score.toFixed(1)} / 25
                   </div>
                   <div className="mt-2 text-sm text-muted-foreground">
-                    {riskSnapshot.motion.reason || 'No motion validation reason available.'}
+                    {diagnosticsValidation?.decision.reason || riskSnapshot.motion.reason || 'No motion validation reason available.'}
                   </div>
                 </div>
                 <div className="rounded-lg border border-border/50 bg-secondary/45 p-4">
@@ -1022,9 +1037,9 @@ export default function StudentDashboard() {
                   <div className="mt-2 text-sm text-muted-foreground">
                     {riskSnapshot.autoSOS.reason}
                   </div>
-                  {motionValidation?.cooldownRemainingMs ? (
+                  {diagnosticsValidation?.cooldownRemainingMs ? (
                     <div className="mt-2 text-xs text-muted-foreground">
-                      Cooldown: {(motionValidation.cooldownRemainingMs / 1000).toFixed(1)}s
+                      Cooldown: {(diagnosticsValidation.cooldownRemainingMs / 1000).toFixed(1)}s
                     </div>
                   ) : null}
                 </div>
