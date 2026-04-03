@@ -371,6 +371,7 @@ export class HybridMotionAnalyzer {
     this.phase = 'impact-validation';
     this.cooldownUntil =
       now + (mode === 'held' ? this.config.holdCooldownMs : this.config.rejectionCooldownMs);
+    this.lastSnapshot = null;
     this.rollingBuffer.clear();
   }
 
