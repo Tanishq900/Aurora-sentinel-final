@@ -7,6 +7,7 @@ import SOSButton from '../../components/SOSButton';
 import { AudioSensor, AudioData } from '../../sensors/audio';
 import { MotionSensor, MotionData } from '../../sensors/motion';
 import { calculateTotalRisk, shouldTriggerAutoSOS } from '../../risk/engine';
+import { HybridMotionAnalyzer, type ValidationSnapshot } from '../../risk/hybrid-motion';
 import { connectSocket, getSocket } from '../../ws/client';
 import AuroraMap from '../../components/AuroraMap';
 import EventTimeline from '../../components/EventTimeline';
@@ -14,6 +15,7 @@ import { generateExplanation } from '../../risk/explain';
 import { riskZonesService, RiskZone } from '../../services/risk-zones.service';
 import { supabase } from '../../lib/supabaseClient';
 import SOSConfirmationModal from '../../components/SOSConfirmationModal';
+import AIValidationModal from '../../components/AIValidationModal';
 
 export default function StudentDashboard() {
   const { user, logout } = useAuthStore();
@@ -33,12 +35,13 @@ export default function StudentDashboard() {
     shake: 0,
     intensity: 0,
   });
+  const [motionValidation, setMotionValidation] = useState<ValidationSnapshot | null>(null);
   const [riskSnapshot, setRiskSnapshot] = useState(calculateTotalRisk(audioData, motionData));
+  const [aiValidationOpen, setAIValidationOpen] = useState(false);
   const [showPresentationModal, setShowPresentationModal] = useState(false);
   const [presentationPassword, setPresentationPassword] = useState('');
   const [autoSOSTriggered, setAutoSOSTriggered] = useState(false);
   const [audioSensorInstance, setAudioSensorInstance] = useState<AudioSensor | null>(null);
-  const [lastAutoSOSTime, setLastAutoSOSTime] = useState<number>(0); // Track last auto-SOS trigger time
   const [userLocation, setUserLocation] = useState<
     ({
       lat: number;
@@ -63,6 +66,7 @@ export default function StudentDashboard() {
   const mediaCountdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isMediaCountdownRunningRef = useRef<boolean>(false);
   const isMediaSOSSentRef = useRef<boolean>(false);
+  const hybridMotionAnalyzerRef = useRef<HybridMotionAnalyzer | null>(null);
   const latestAudioRef = useRef<AudioData>(audioData);
   const latestMotionRef = useRef<MotionData>(motionData);
   const latestRiskTotalRef = useRef<number>(riskSnapshot.total);
@@ -80,6 +84,28 @@ export default function StudentDashboard() {
   const [chatSecurityEmail, setChatSecurityEmail] = useState<string | undefined>(undefined);
   const [chatDraft, setChatDraft] = useState('');
   const navigate = useNavigate();
+
+  const dismissAIValidation = (timestamp?: number) => {
+    hybridMotionAnalyzerRef.current?.dismiss(timestamp ?? Date.now());
+    setAIValidationOpen(false);
+    setMotionValidation(null);
+  };
+
+  const confirmAIValidation = (manualOverride = false) => {
+    setAIValidationOpen(false);
+
+    const shouldTrigger = manualOverride
+      ? shouldTriggerAutoSOS(riskSnapshot.total, presentationMode)
+      : riskSnapshot.autoSOS.shouldTrigger && shouldTriggerAutoSOS(riskSnapshot.total, presentationMode);
+
+    if (shouldTrigger) {
+      setAutoSOSTriggered(true);
+      return true;
+    }
+
+    dismissAIValidation();
+    return false;
+  };
 
   useEffect(() => {
     return () => {
@@ -652,6 +678,8 @@ export default function StudentDashboard() {
   }, [chatOpen, chatSosId, chatSecurityEmail]);
 
   useEffect(() => {
+    hybridMotionAnalyzerRef.current = new HybridMotionAnalyzer();
+
     // Initialize sensors
     const initSensors = async () => {
       try {
@@ -667,6 +695,24 @@ export default function StudentDashboard() {
 
           const handleMotion = (event: DeviceMotionEvent) => {
             const data = motion.handleMotionEvent(event);
+            const analyzer = hybridMotionAnalyzerRef.current;
+            if (analyzer) {
+              const { snapshot, isValidationComplete } = analyzer.ingestMotion(data);
+              if (snapshot) {
+                setMotionValidation(snapshot);
+                if (!autoSOSTriggered) {
+                  setAIValidationOpen(true);
+                }
+
+                if (isValidationComplete) {
+                  if (snapshot.decision.validatedDanger) {
+                    confirmAIValidation();
+                  } else {
+                    dismissAIValidation(snapshot.lastUpdatedAt);
+                  }
+                }
+              }
+            }
             setMotionData(data);
           };
 
@@ -681,6 +727,7 @@ export default function StudentDashboard() {
           return () => {
             audio.stop();
             motion.stop();
+            hybridMotionAnalyzerRef.current?.reset();
             window.removeEventListener('devicemotion', handleMotion as any);
             clearInterval(audioInterval);
           };
@@ -693,7 +740,7 @@ export default function StudentDashboard() {
     };
 
     initSensors();
-  }, []);
+  }, [autoSOSTriggered, presentationMode, riskSnapshot.total]);
 
   // Update audio sensor sensitivity when presentation mode changes
   useEffect(() => {
@@ -710,6 +757,10 @@ export default function StudentDashboard() {
       {
         ...(userLocation || {}),
         presentationMode,
+      },
+      undefined,
+      {
+        motionValidation,
       }
     );
     setRiskSnapshot(snapshot);
@@ -738,28 +789,7 @@ export default function StudentDashboard() {
       })
     );
 
-  }, [audioData, motionData, userLocation, presentationMode]);
-
-  // Monitor for auto-SOS trigger - ONLY when risk level is "high" with 3-second cooldown
-  useEffect(() => {
-    if (!riskSnapshot || !riskSnapshot.total) return;
-    if (autoSOSTriggered) return;
-
-    const now = Date.now();
-    const timeSinceLastTrigger = now - lastAutoSOSTime;
-    const cooldownMs = 10000; // strict 10-second cooldown
-
-    if (timeSinceLastTrigger < cooldownMs) return;
-
-    if (riskSnapshot.level === 'high') {
-      const shouldTrigger = shouldTriggerAutoSOS(riskSnapshot.total, presentationMode);
-
-      if (shouldTrigger) {
-        setAutoSOSTriggered(true);
-        setLastAutoSOSTime(now);
-      }
-    }
-  }, [riskSnapshot, presentationMode, autoSOSTriggered, lastAutoSOSTime]);
+  }, [audioData, motionData, userLocation, presentationMode, motionValidation]);
 
   const loadSOSHistory = async () => {
     try {
@@ -879,15 +909,16 @@ export default function StudentDashboard() {
             </div>
             <SOSButton 
               location={userLocation}
+              riskSnapshot={riskSnapshot}
               onSOSTriggered={() => {
                 loadSOSHistory();
                 setAutoSOSTriggered(false); // Reset after SOS is sent
-                setLastAutoSOSTime(Date.now()); // Update cooldown timer
+                dismissAIValidation();
               }}
               triggerType={autoSOSTriggered ? 'ai' : undefined}
               onCancelAuto={() => {
                 setAutoSOSTriggered(false); // Reset if user cancels
-                setLastAutoSOSTime(Date.now()); // Update cooldown timer
+                dismissAIValidation();
               }}
             />
             <button
@@ -931,6 +962,48 @@ export default function StudentDashboard() {
                   </div>
                 </div>
               ))}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="rounded-lg border border-border/50 bg-secondary/45 p-4">
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">Motion Validation</div>
+                  <div className="mt-2 flex items-center justify-between gap-3">
+                    <span className="text-foreground font-semibold capitalize">
+                      {riskSnapshot.motion.classification}
+                    </span>
+                    <span className="text-sm text-muted-foreground">
+                      {Math.round(riskSnapshot.motion.confidence * 100)}% confidence
+                    </span>
+                  </div>
+                  <div className="mt-2 text-sm text-muted-foreground">
+                    Raw: {riskSnapshot.motion.rawScore.toFixed(1)} / 25
+                    {' • '}
+                    Effective: {riskSnapshot.motion.score.toFixed(1)} / 25
+                  </div>
+                  <div className="mt-2 text-sm text-muted-foreground">
+                    {riskSnapshot.motion.reason || 'No motion validation reason available.'}
+                  </div>
+                </div>
+                <div className="rounded-lg border border-border/50 bg-secondary/45 p-4">
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">Auto-SOS Gate</div>
+                  <div className="mt-2 flex items-center justify-between gap-3">
+                    <span className={`font-semibold ${riskSnapshot.autoSOS.shouldTrigger ? 'text-danger' : 'text-warning'}`}>
+                      {riskSnapshot.autoSOS.shouldTrigger ? 'Ready' : 'Held'}
+                    </span>
+                    <span className="text-sm text-muted-foreground">
+                      {riskSnapshot.autoSOS.supportSignals.length > 0
+                        ? riskSnapshot.autoSOS.supportSignals.join(', ')
+                        : 'No support signal yet'}
+                    </span>
+                  </div>
+                  <div className="mt-2 text-sm text-muted-foreground">
+                    {riskSnapshot.autoSOS.reason}
+                  </div>
+                  {motionValidation?.cooldownRemainingMs ? (
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      Cooldown: {(motionValidation.cooldownRemainingMs / 1000).toFixed(1)}s
+                    </div>
+                  ) : null}
+                </div>
+              </div>
               <div className="mt-4 p-4 bg-secondary/50 border border-border/50 rounded-lg">
                 <div className="flex justify-between items-center">
                   <span className="text-muted-foreground">Risk Level</span>
@@ -1232,6 +1305,14 @@ export default function StudentDashboard() {
         isSending={isSendingMedia}
         onSendNow={handleMediaSendNow}
         onCancel={cancelMediaCountdown}
+      />
+
+      <AIValidationModal
+        isOpen={aiValidationOpen && !autoSOSTriggered}
+        snapshot={motionValidation}
+        maxDurationMs={hybridMotionAnalyzerRef.current?.getConfig().validationWindowMs ?? 4000}
+        onSendNow={() => confirmAIValidation(true)}
+        onDismiss={() => dismissAIValidation()}
       />
 
       {chatOpen && (

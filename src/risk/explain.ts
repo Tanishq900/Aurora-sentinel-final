@@ -47,7 +47,13 @@ export function generateExplanation(inputs: ExplanationInputs): string[] {
   // Motion interpretation
   if (motionInputs) {
     const jerkValue = motionInputs.accelerationMagnitude.toFixed(1);
-    if (snapshot.motion.score > 15) {
+    if (snapshot.motion.classification === 'abnormal') {
+      bullets.push(`Abnormal motion validated (${jerkValue}g, confidence ${Math.round(snapshot.motion.confidence * 100)}%)`);
+    } else if (snapshot.motion.classification === 'running-like') {
+      bullets.push(`Smooth running-like motion filtered (${jerkValue}g)`);
+    } else if (snapshot.motion.classification === 'drop-like') {
+      bullets.push(`Drop-like motion rejected after validation (${jerkValue}g)`);
+    } else if (snapshot.motion.score > 15) {
       bullets.push(`Sudden jerk motion (${jerkValue}g)`);
     } else if (snapshot.motion.score > 8) {
       bullets.push(`Moderate motion detected (${jerkValue}g)`);
@@ -78,6 +84,16 @@ export function generateExplanation(inputs: ExplanationInputs): string[] {
     } else {
       bullets.push('Daytime multiplier applied');
     }
+  }
+
+  if (snapshot.autoSOS.shouldTrigger) {
+    bullets.push(`Auto-SOS ready: ${snapshot.autoSOS.reason}`);
+  } else if (snapshot.motion.validatedDanger || snapshot.motion.classification !== 'inconclusive') {
+    bullets.push(`Auto-SOS held: ${snapshot.autoSOS.reason}`);
+  }
+
+  if (snapshot.autoSOS.supportSignals.length > 0) {
+    bullets.push(`Support signals: ${snapshot.autoSOS.supportSignals.join(', ')}`);
   }
 
   // Final summary line

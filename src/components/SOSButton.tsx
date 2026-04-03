@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { sosService } from '../services/sos.service';
-import { calculateTotalRisk } from '../risk/engine';
-import { AudioSensor, AudioData } from '../sensors/audio';
-import { MotionSensor, MotionData } from '../sensors/motion';
+import type { RiskSnapshot } from '../risk/engine';
 import SOSConfirmationModal from './SOSConfirmationModal';
 
 interface SOSButtonProps {
@@ -10,6 +8,7 @@ interface SOSButtonProps {
   triggerType?: 'manual' | 'ai';
   onCancelAuto?: () => void;
   location?: { lat: number; lng: number } | null;
+  riskSnapshot: RiskSnapshot;
 }
 
 export default function SOSButton({ 
@@ -17,27 +16,12 @@ export default function SOSButton({
   triggerType: externalTriggerType,
   onCancelAuto,
   location,
+  riskSnapshot,
 }: SOSButtonProps) {
   const [countdown, setCountdown] = useState<number | null>(null);
   const [isTriggering, setIsTriggering] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [internalTriggerType, setInternalTriggerType] = useState<'manual' | 'ai'>('manual');
-  const [audioSensor, setAudioSensor] = useState<AudioSensor | null>(null);
-  const [motionSensor, setMotionSensor] = useState<MotionSensor | null>(null);
-  const [audioData, setAudioData] = useState<AudioData>({
-    rms: 0,
-    pitch: 0,
-    pitchVariance: 0,
-    spikeCount: 0,
-    stress: 0,
-  });
-  const [motionData, setMotionData] = useState<MotionData>({
-    acceleration: 0,
-    accelerationMagnitude: 0,
-    jitter: 0,
-    shake: 0,
-    intensity: 0,
-  });
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
   const isCountdownRunningRef = useRef<boolean>(false);
   const isSOSSentRef = useRef<boolean>(false); // Prevent duplicate SOS submissions
@@ -64,53 +48,6 @@ export default function SOSButton({
     // This ensures the countdown stays active once triggered
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [externalTriggerType]);
-
-  useEffect(() => {
-    // Initialize sensors
-    const initSensors = async () => {
-      try {
-        const audio = new AudioSensor();
-        await audio.initialize();
-        setAudioSensor(audio);
-
-        const motion = new MotionSensor();
-        if (motion.isSupported()) {
-          await motion.initialize();
-          setMotionSensor(motion);
-
-          // Listen to device motion events
-          const handleMotion = (event: DeviceMotionEvent) => {
-            const data = motion.handleMotionEvent(event);
-            setMotionData(data);
-          };
-
-          window.addEventListener('devicemotion', handleMotion as any);
-          return () => window.removeEventListener('devicemotion', handleMotion as any);
-        }
-      } catch (error) {
-        console.error('Failed to initialize sensors:', error);
-      }
-    };
-
-    initSensors();
-
-    return () => {
-      if (audioSensor) audioSensor.stop();
-      if (motionSensor) motionSensor.stop();
-    };
-  }, []);
-
-  useEffect(() => {
-    // Update audio data in real-time
-    if (!audioSensor) return;
-
-    const interval = setInterval(() => {
-      const data = audioSensor.getAudioData();
-      setAudioData(data);
-    }, 200);
-
-    return () => clearInterval(interval);
-  }, [audioSensor]);
 
   const handleSOSClick = () => {
     if (isSubmitting) return;
@@ -142,9 +79,7 @@ export default function SOSButton({
 
     try {
       await waitForNextPaint();
-      // Calculate current risk
-      const riskSnapshot = calculateTotalRisk(audioData, motionData, location || undefined);
-      
+
       await sosService.createSOS({
         risk_score: riskSnapshot.total,
         factors: {
@@ -166,7 +101,7 @@ export default function SOSButton({
     } finally {
       setIsSubmitting(false);
     }
-  }, [audioData, motionData, internalTriggerType, onSOSTriggered, location]);
+  }, [internalTriggerType, onSOSTriggered, location, riskSnapshot]);
 
   const handleSendNow = () => {
     if (isSubmitting) return;

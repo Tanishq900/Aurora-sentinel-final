@@ -4,6 +4,7 @@
 
 import { AudioData } from '../sensors/audio';
 import { MotionData } from '../sensors/motion';
+import type { MotionClassification, ValidationSnapshot } from './hybrid-motion';
 
 export interface RiskFactors {
   audio: number;
@@ -21,6 +22,11 @@ export interface RiskSnapshot {
   motion: {
     intensity: number;
     score: number;
+    rawScore: number;
+    classification: MotionClassification;
+    confidence: number;
+    validatedDanger: boolean;
+    reason?: string;
   };
   time: {
     riskFactor: number;
@@ -32,9 +38,26 @@ export interface RiskSnapshot {
   };
   total: number;
   level: 'low' | 'medium' | 'high';
+  autoSOS: {
+    shouldTrigger: boolean;
+    supportSignals: string[];
+    confidence: number;
+    reason: string;
+  };
 }
 
 let lastAutoSOSTimestamp = 0;
+
+export interface RiskCalculationOptions {
+  motionValidation?: ValidationSnapshot | null;
+}
+
+export interface AutoSOSDecision {
+  shouldTrigger: boolean;
+  supportSignals: string[];
+  confidence: number;
+  reason: string;
+}
 
 export function calculateAudioStress(inputs: { rms: number; pitchVariance: number; spikeCount: number }): number {
   const { rms, pitchVariance, spikeCount } = inputs;
@@ -104,11 +127,115 @@ export function calculateLocationRisk(location?: any): number {
   return locationScore;
 }
 
+export function calculateValidatedMotionScore(
+  rawMotionScore: number,
+  motionValidation?: ValidationSnapshot | null
+): {
+  score: number;
+  classification: MotionClassification;
+  confidence: number;
+  validatedDanger: boolean;
+  reason?: string;
+} {
+  if (!motionValidation) {
+    return {
+      score: Math.min(rawMotionScore * 0.35, 8),
+      classification: 'inconclusive',
+      confidence: 0,
+      validatedDanger: false,
+      reason: 'no validated motion event yet',
+    };
+  }
+
+  const { classification, confidence, validatedDanger, reason } = motionValidation.decision;
+
+  let score = rawMotionScore;
+
+  switch (classification) {
+    case 'abnormal':
+      score = rawMotionScore;
+      break;
+    case 'running-like':
+      score = Math.min(rawMotionScore * 0.25, 6);
+      break;
+    case 'drop-like':
+      score = 0;
+      break;
+    case 'inconclusive':
+    default:
+      score = Math.min(rawMotionScore * 0.4, 10);
+      break;
+  }
+
+  return {
+    score,
+    classification,
+    confidence,
+    validatedDanger,
+    reason,
+  };
+}
+
+export function evaluateAutoSOSDecision(snapshot: RiskSnapshot): AutoSOSDecision {
+  const supportSignals: string[] = [];
+
+  const highAudio = snapshot.audio.score >= 18;
+  const unsafeLocation = snapshot.location.score >= 15;
+  const riskyTime = snapshot.time.score >= 12;
+  const veryHighConfidence = snapshot.motion.confidence >= 0.92;
+
+  if (highAudio) supportSignals.push('high audio');
+  if (unsafeLocation) supportSignals.push('unsafe location');
+  if (riskyTime) supportSignals.push('risky time');
+
+  const hasSupportSignal = supportSignals.length > 0;
+  const validatedDanger = snapshot.motion.validatedDanger;
+  const confidence = snapshot.motion.confidence;
+  const highTotalRisk = snapshot.total >= 50;
+
+  if (!validatedDanger) {
+    return {
+      shouldTrigger: false,
+      supportSignals,
+      confidence,
+      reason: 'motion event not validated as dangerous',
+    };
+  }
+
+  if (!highTotalRisk && !veryHighConfidence) {
+    return {
+      shouldTrigger: false,
+      supportSignals,
+      confidence,
+      reason: 'validated motion lacks enough total risk to escalate',
+    };
+  }
+
+  if (!hasSupportSignal && !veryHighConfidence) {
+    return {
+      shouldTrigger: false,
+      supportSignals,
+      confidence,
+      reason: 'validated motion needs audio, location, or time support',
+    };
+  }
+
+  return {
+    shouldTrigger: true,
+    supportSignals,
+    confidence,
+    reason: hasSupportSignal
+      ? `validated abnormal motion + ${supportSignals.join(' + ')}`
+      : 'validated abnormal motion with very high confidence',
+  };
+}
+
 export function calculateTotalRisk(
   audioData: AudioData,
   motionData: MotionData,
   location?: any,
-  date?: Date
+  date?: Date,
+  options?: RiskCalculationOptions
 ): RiskSnapshot {
   const audioScore = calculateAudioStress({
     rms: audioData.rms,
@@ -120,11 +247,12 @@ export function calculateTotalRisk(
     accelerationMagnitude: motionData.accelerationMagnitude,
     jitter: motionData.jitter,
   });
+  const validatedMotion = calculateValidatedMotionScore(motionScore, options?.motionValidation);
 
   const timeScore = calculateTimeRisk(date);
   const locationScore = calculateLocationRisk(location);
 
-  const totalRisk = audioScore + motionScore + timeScore + locationScore;
+  const totalRisk = audioScore + validatedMotion.score + timeScore + locationScore;
 
   let level: 'low' | 'medium' | 'high';
   if (totalRisk < 25) {
@@ -142,7 +270,12 @@ export function calculateTotalRisk(
     },
     motion: {
       intensity: motionData.intensity,
-      score: motionScore,
+      score: validatedMotion.score,
+      rawScore: motionScore,
+      classification: validatedMotion.classification,
+      confidence: validatedMotion.confidence,
+      validatedDanger: validatedMotion.validatedDanger,
+      reason: validatedMotion.reason,
     },
     time: {
       riskFactor: (() => {
@@ -160,6 +293,43 @@ export function calculateTotalRisk(
     },
     total: totalRisk,
     level,
+    autoSOS: evaluateAutoSOSDecision({
+      audio: {
+        stress: audioData.stress,
+        score: audioScore,
+      },
+      motion: {
+        intensity: motionData.intensity,
+        score: validatedMotion.score,
+        rawScore: motionScore,
+        classification: validatedMotion.classification,
+        confidence: validatedMotion.confidence,
+        validatedDanger: validatedMotion.validatedDanger,
+        reason: validatedMotion.reason,
+      },
+      time: {
+        riskFactor: (() => {
+          const hour = (date || new Date()).getHours();
+          if (hour >= 6 && hour < 20) return 0.2;
+          if (hour >= 20 && hour < 24) return 0.6;
+          if (hour >= 0 && hour < 4) return 1.0;
+          return 0.4;
+        })(),
+        score: timeScore,
+      },
+      location: {
+        riskFactor: 1.0,
+        score: locationScore,
+      },
+      total: totalRisk,
+      level,
+      autoSOS: {
+        shouldTrigger: false,
+        supportSignals: [],
+        confidence: 0,
+        reason: '',
+      },
+    }),
   };
 }
 
