@@ -142,7 +142,7 @@ export default function StudentDashboard() {
           classification: 'inconclusive',
           validatedDanger: false,
           confidence: 0.2,
-          reason: 'rechecking motion after SOS cancellation',
+          reason: 'rechecking motion after auto SOS cancellation',
           shouldEarlyConfirm: false,
           shouldEarlyReject: false,
         },
