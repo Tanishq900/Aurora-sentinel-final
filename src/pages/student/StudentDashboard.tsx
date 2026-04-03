@@ -113,9 +113,8 @@ export default function StudentDashboard() {
   const getLatestValidationSnapshot = () => motionValidation || lastMotionValidation;
 
   const confirmAIValidation = (manualOverride = false) => {
-    setAIValidationOpen(false);
-
     if (manualOverride) {
+      setAIValidationOpen(false);
       setAutoSOSTriggered(true);
       return true;
     }
@@ -124,9 +123,10 @@ export default function StudentDashboard() {
     const latestPresentationMode = latestPresentationModeRef.current;
     const shouldTrigger =
       latestSnapshot.autoSOS.shouldTrigger &&
-      shouldTriggerAutoSOS(latestSnapshot.total, latestPresentationMode, true);
+      shouldTriggerAutoSOS(latestSnapshot.total, latestPresentationMode, true, true);
 
     if (shouldTrigger) {
+      setAIValidationOpen(false);
       setAutoSOSTriggered(true);
       return true;
     }

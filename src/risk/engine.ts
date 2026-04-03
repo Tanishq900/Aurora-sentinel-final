@@ -325,14 +325,19 @@ export function calculateTotalRisk(
 /**
  * Check if auto-SOS should be triggered
  */
-export function shouldTriggerAutoSOS(totalRisk: number, _presentationMode?: boolean, force = false): boolean {
+export function shouldTriggerAutoSOS(
+  totalRisk: number,
+  _presentationMode?: boolean,
+  forceThreshold = false,
+  bypassCooldown = false
+): boolean {
   const threshold = 50;
-  if (!force && totalRisk <= threshold) {
+  if (!forceThreshold && totalRisk <= threshold) {
     return false;
   }
 
   const now = Date.now();
-  if (now - lastAutoSOSTimestamp < 10000) {
+  if (!bypassCooldown && now - lastAutoSOSTimestamp < 10000) {
     return false;
   }
 
