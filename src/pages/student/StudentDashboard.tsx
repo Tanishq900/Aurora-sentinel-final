@@ -834,8 +834,7 @@ export default function StudentDashboard() {
                 setLastMotionValidation(snapshot);
                 if (
                   !latestAutoSOSTriggeredRef.current &&
-                  Date.now() >= manualValidationDismissUntilRef.current &&
-                  Date.now() >= autoSOSCooldownUntilRef.current
+                  Date.now() >= manualValidationDismissUntilRef.current
                 ) {
                   setAIValidationOpen(true);
                 }
@@ -856,8 +855,7 @@ export default function StudentDashboard() {
                     holdAIValidation(snapshot, snapshot.lastUpdatedAt);
                   } else if (
                     snapshot.latestMotion >= analyzer.getConfig().sustainedTriggerThreshold &&
-                    Date.now() >= manualValidationDismissUntilRef.current &&
-                    Date.now() >= autoSOSCooldownUntilRef.current
+                    Date.now() >= manualValidationDismissUntilRef.current
                   ) {
                     analyzer.beginValidation(snapshot.lastUpdatedAt);
                     setAIValidationOpen(true);
