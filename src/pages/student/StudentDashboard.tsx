@@ -75,6 +75,7 @@ export default function StudentDashboard() {
   const latestPresentationModeRef = useRef(presentationMode);
   const latestAutoSOSTriggeredRef = useRef(autoSOSTriggered);
   const latestUserLocationRef = useRef(userLocation);
+  const manualValidationDismissUntilRef = useRef(0);
   const attachInputRef = useRef<HTMLInputElement | null>(null);
   const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -90,7 +91,15 @@ export default function StudentDashboard() {
   const [chatDraft, setChatDraft] = useState('');
   const navigate = useNavigate();
 
-  const dismissAIValidation = (timestamp?: number, mode: 'rejected' | 'held' = 'rejected') => {
+  const dismissAIValidation = (
+    timestamp?: number,
+    mode: 'rejected' | 'held' = 'rejected',
+    suppressForMs = 0
+  ) => {
+    manualValidationDismissUntilRef.current = Math.max(
+      manualValidationDismissUntilRef.current,
+      (timestamp ?? Date.now()) + suppressForMs
+    );
     hybridMotionAnalyzerRef.current?.dismiss(mode, timestamp ?? Date.now());
     setAIValidationOpen(false);
     setMotionValidation(null);
@@ -782,7 +791,10 @@ export default function StudentDashboard() {
               if (snapshot) {
                 setMotionValidation(snapshot);
                 setLastMotionValidation(snapshot);
-                if (!latestAutoSOSTriggeredRef.current) {
+                if (
+                  !latestAutoSOSTriggeredRef.current &&
+                  Date.now() >= manualValidationDismissUntilRef.current
+                ) {
                   setAIValidationOpen(true);
                 }
 
@@ -793,10 +805,16 @@ export default function StudentDashboard() {
                       analyzer.beginValidation(snapshot.lastUpdatedAt);
                       setAIValidationOpen(true);
                     }
+                  } else if (snapshot.decision.classification === 'inconclusive') {
+                    holdAIValidation(snapshot, snapshot.lastUpdatedAt);
                   } else if (
-                    (snapshot.decision.classification === 'inconclusive' ||
-                      snapshot.phase === 'immobility-watch') &&
-                    snapshot.latestMotion >= analyzer.getConfig().sustainedTriggerThreshold
+                    snapshot.phase === 'immobility-watch' &&
+                    snapshot.decision.classification === 'drop-like'
+                  ) {
+                    holdAIValidation(snapshot, snapshot.lastUpdatedAt);
+                  } else if (
+                    snapshot.latestMotion >= analyzer.getConfig().sustainedTriggerThreshold &&
+                    Date.now() >= manualValidationDismissUntilRef.current
                   ) {
                     analyzer.beginValidation(snapshot.lastUpdatedAt);
                     setAIValidationOpen(true);
@@ -1408,7 +1426,7 @@ export default function StudentDashboard() {
         snapshot={motionValidation}
         maxDurationMs={hybridMotionAnalyzerRef.current?.getConfig().validationWindowMs ?? 4000}
         onSendNow={() => confirmAIValidation(true)}
-        onDismiss={() => dismissAIValidation()}
+        onDismiss={() => dismissAIValidation(undefined, 'rejected', 8000)}
       />
 
       {chatOpen && (

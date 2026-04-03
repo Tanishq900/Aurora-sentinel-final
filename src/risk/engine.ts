@@ -184,6 +184,8 @@ export function evaluateAutoSOSDecision(snapshot: RiskSnapshot): AutoSOSDecision
   const unsafeLocation = snapshot.location.score >= 15;
   const riskyTime = snapshot.time.score >= 12;
   const veryHighConfidence = snapshot.motion.confidence >= 0.92;
+  const strongAbnormalConfidence = snapshot.motion.confidence >= 0.72;
+  const strongImmobilityConfidence = snapshot.motion.confidence >= 0.68;
 
   if (highAudio) supportSignals.push('high audio');
   if (unsafeLocation) supportSignals.push('unsafe location');
@@ -198,6 +200,33 @@ export function evaluateAutoSOSDecision(snapshot: RiskSnapshot): AutoSOSDecision
       supportSignals,
       confidence,
       reason: 'motion event not validated as dangerous',
+    };
+  }
+
+  if (snapshot.motion.classification === 'immobile-after-impact') {
+    if (!strongImmobilityConfidence) {
+      return {
+        shouldTrigger: false,
+        supportSignals,
+        confidence,
+        reason: 'immobility after impact detected, but confidence is still building',
+      };
+    }
+
+    return {
+      shouldTrigger: true,
+      supportSignals,
+      confidence,
+      reason: 'impact followed by prolonged immobility',
+    };
+  }
+
+  if (snapshot.motion.classification === 'abnormal' && !strongAbnormalConfidence && !veryHighConfidence) {
+    return {
+      shouldTrigger: false,
+      supportSignals,
+      confidence,
+      reason: 'abnormal motion detected, but confidence is not high enough yet',
     };
   }
 
