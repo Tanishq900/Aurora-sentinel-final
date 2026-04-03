@@ -153,6 +153,7 @@ export function calculateValidatedMotionScore(
 
   switch (classification) {
     case 'abnormal':
+    case 'immobile-after-impact':
       score = rawMotionScore;
       break;
     case 'running-like':

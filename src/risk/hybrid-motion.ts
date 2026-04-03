@@ -1,15 +1,19 @@
 import type { MotionData } from '../sensors/motion';
 
-export type MotionClassification = 'drop-like' | 'running-like' | 'abnormal' | 'inconclusive';
+export type MotionClassification = 'drop-like' | 'immobile-after-impact' | 'running-like' | 'abnormal' | 'inconclusive';
+
+export type ValidationPhase = 'impact-validation' | 'immobility-watch';
 
 export interface HybridMotionConfig {
   sampleIntervalMs: number;
   validationWindowMs: number;
+  immobilityWindowMs: number;
   rejectionCooldownMs: number;
   holdCooldownMs: number;
   spikeDeltaThreshold: number;
   minimumMotionThreshold: number;
   sustainedTriggerThreshold: number;
+  immobilityThreshold: number;
   highMotionThreshold: number;
   dropAverageThreshold: number;
   runningVarianceThreshold: number;
@@ -53,6 +57,7 @@ export interface MotionDecision {
 }
 
 export interface ValidationSnapshot {
+  phase: ValidationPhase;
   triggeredAt: number;
   lastUpdatedAt: number;
   elapsedMs: number;
@@ -67,11 +72,13 @@ export interface ValidationSnapshot {
 export const DEFAULT_HYBRID_MOTION_CONFIG: HybridMotionConfig = {
   sampleIntervalMs: 100,
   validationWindowMs: 4000,
+  immobilityWindowMs: 6000,
   rejectionCooldownMs: 5000,
   holdCooldownMs: 1200,
   spikeDeltaThreshold: 0.12,
   minimumMotionThreshold: 0.08,
   sustainedTriggerThreshold: 0.16,
+  immobilityThreshold: 0.035,
   highMotionThreshold: 0.45,
   dropAverageThreshold: 0.12,
   runningVarianceThreshold: 0.01,
@@ -321,6 +328,7 @@ export class HybridMotionAnalyzer {
   private readonly config: HybridMotionConfig;
   private readonly rollingBuffer: RollingMotionBuffer;
   private validationStartTime: number | null = null;
+  private phase: ValidationPhase = 'impact-validation';
   private cooldownUntil = 0;
   private lastMotion = 0;
   private lastSampleAt = 0;
@@ -350,6 +358,7 @@ export class HybridMotionAnalyzer {
 
   reset(): void {
     this.validationStartTime = null;
+    this.phase = 'impact-validation';
     this.cooldownUntil = 0;
     this.lastMotion = 0;
     this.lastSampleAt = 0;
@@ -359,6 +368,7 @@ export class HybridMotionAnalyzer {
 
   dismiss(mode: 'rejected' | 'held' = 'rejected', now = Date.now()): void {
     this.validationStartTime = null;
+    this.phase = 'impact-validation';
     this.cooldownUntil =
       now + (mode === 'held' ? this.config.holdCooldownMs : this.config.rejectionCooldownMs);
     this.rollingBuffer.clear();
@@ -370,6 +380,14 @@ export class HybridMotionAnalyzer {
 
   beginValidation(now = Date.now()): void {
     this.validationStartTime = now;
+    this.phase = 'impact-validation';
+    this.lastSnapshot = null;
+    this.rollingBuffer.clear();
+  }
+
+  beginImmobilityWatch(now = Date.now()): void {
+    this.validationStartTime = now;
+    this.phase = 'immobility-watch';
     this.lastSnapshot = null;
     this.rollingBuffer.clear();
   }
@@ -405,8 +423,22 @@ export class HybridMotionAnalyzer {
       return { spike, snapshot: null, isValidationComplete: false };
     }
 
+    if (
+      this.phase === 'impact-validation' &&
+      this.lastSnapshot.decision.classification === 'drop-like' &&
+      this.lastSnapshot.elapsedMs >= this.config.validationWindowMs
+    ) {
+      this.beginImmobilityWatch(now);
+      this.rollingBuffer.push({ timestamp: now, motion });
+      this.lastSampleAt = now;
+      this.lastSnapshot = this.buildSnapshot(spike, now, motion);
+    }
+
+    const phaseWindowMs =
+      this.phase === 'immobility-watch' ? this.config.immobilityWindowMs : this.config.validationWindowMs;
+
     const isValidationComplete =
-      this.lastSnapshot.elapsedMs >= this.config.validationWindowMs ||
+      this.lastSnapshot.elapsedMs >= phaseWindowMs ||
       this.lastSnapshot.decision.shouldEarlyConfirm ||
       this.lastSnapshot.decision.shouldEarlyReject;
 
@@ -424,9 +456,13 @@ export class HybridMotionAnalyzer {
   ): ValidationSnapshot {
     const triggeredAt = this.validationStartTime ?? now;
     const features = extractMotionFeatures(this.rollingBuffer.toArray(), this.config);
-    const decision = classifyMotionWindow(features, this.config);
+    const decision =
+      this.phase === 'immobility-watch'
+        ? classifyImmobilityWindow(features, this.config)
+        : classifyMotionWindow(features, this.config);
 
     return {
+      phase: this.phase,
       triggeredAt,
       lastUpdatedAt: now,
       elapsedMs: now - triggeredAt,
@@ -438,4 +474,57 @@ export class HybridMotionAnalyzer {
       decision,
     };
   }
+}
+
+export function classifyImmobilityWindow(
+  features: MotionFeatures,
+  config: HybridMotionConfig = DEFAULT_HYBRID_MOTION_CONFIG
+): MotionDecision {
+  if (features.sampleCount < 3) {
+    return {
+      classification: 'drop-like',
+      validatedDanger: false,
+      confidence: 0.3,
+      reason: 'watching for immobility after impact',
+      shouldEarlyConfirm: false,
+      shouldEarlyReject: false,
+    };
+  }
+
+  const immobilityConfidence = clamp(
+    (1 - clamp(features.average / Math.max(config.immobilityThreshold, 0.001))) * 0.45 +
+      features.lowMotionRatio * 0.35 +
+      (1 - clamp(features.max / Math.max(config.minimumMotionThreshold, 0.001))) * 0.2
+  );
+
+  if (features.average <= config.immobilityThreshold && features.lowMotionRatio >= 0.85) {
+    return {
+      classification: 'immobile-after-impact',
+      validatedDanger: true,
+      confidence: round(immobilityConfidence),
+      reason: 'impact followed by prolonged immobility detected',
+      shouldEarlyConfirm: immobilityConfidence >= 0.75,
+      shouldEarlyReject: false,
+    };
+  }
+
+  if (features.max > config.sustainedTriggerThreshold || features.average > config.minimumMotionThreshold) {
+    return {
+      classification: 'inconclusive',
+      validatedDanger: false,
+      confidence: 0.45,
+      reason: 'movement resumed after impact, canceling immobility watch',
+      shouldEarlyConfirm: false,
+      shouldEarlyReject: true,
+    };
+  }
+
+  return {
+    classification: 'drop-like',
+    validatedDanger: false,
+    confidence: round(immobilityConfidence),
+    reason: 'monitoring for continued stillness after impact',
+    shouldEarlyConfirm: false,
+    shouldEarlyReject: false,
+  };
 }

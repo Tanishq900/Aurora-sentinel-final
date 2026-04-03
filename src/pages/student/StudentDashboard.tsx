@@ -74,6 +74,7 @@ export default function StudentDashboard() {
   const latestRiskSnapshotRef = useRef(riskSnapshot);
   const latestPresentationModeRef = useRef(presentationMode);
   const latestAutoSOSTriggeredRef = useRef(autoSOSTriggered);
+  const latestUserLocationRef = useRef(userLocation);
   const attachInputRef = useRef<HTMLInputElement | null>(null);
   const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -112,14 +113,31 @@ export default function StudentDashboard() {
 
   const getLatestValidationSnapshot = () => motionValidation || lastMotionValidation;
 
-  const confirmAIValidation = (manualOverride = false) => {
+  const confirmAIValidation = (
+    manualOverride = false,
+    validationSnapshot?: ValidationSnapshot,
+    currentMotionData?: MotionData
+  ) => {
     if (manualOverride) {
       setAIValidationOpen(false);
       setAutoSOSTriggered(true);
       return true;
     }
 
-    const latestSnapshot = latestRiskSnapshotRef.current;
+    const latestSnapshot = validationSnapshot
+      ? calculateTotalRisk(
+          latestAudioRef.current,
+          currentMotionData || latestMotionRef.current,
+          {
+            ...(latestUserLocationRef.current || {}),
+            presentationMode: latestPresentationModeRef.current,
+          },
+          undefined,
+          {
+            motionValidation: validationSnapshot,
+          }
+        )
+      : latestRiskSnapshotRef.current;
     const latestPresentationMode = latestPresentationModeRef.current;
     const shouldTrigger =
       latestSnapshot.autoSOS.shouldTrigger &&
@@ -640,6 +658,10 @@ export default function StudentDashboard() {
   }, [autoSOSTriggered]);
 
   useEffect(() => {
+    latestUserLocationRef.current = userLocation;
+  }, [userLocation]);
+
+  useEffect(() => {
     if (!aiValidationOpen || !motionValidation || motionValidation.cooldownRemainingMs <= 0) {
       return;
     }
@@ -766,13 +788,14 @@ export default function StudentDashboard() {
 
                 if (isValidationComplete) {
                   if (snapshot.decision.validatedDanger) {
-                    const triggered = confirmAIValidation();
+                    const triggered = confirmAIValidation(false, snapshot, data);
                     if (!triggered && snapshot.latestMotion >= analyzer.getConfig().sustainedTriggerThreshold) {
                       analyzer.beginValidation(snapshot.lastUpdatedAt);
                       setAIValidationOpen(true);
                     }
                   } else if (
-                    snapshot.decision.classification === 'inconclusive' &&
+                    (snapshot.decision.classification === 'inconclusive' ||
+                      snapshot.phase === 'immobility-watch') &&
                     snapshot.latestMotion >= analyzer.getConfig().sustainedTriggerThreshold
                   ) {
                     analyzer.beginValidation(snapshot.lastUpdatedAt);

@@ -39,7 +39,9 @@ export default function AIValidationModal({
   if (!isOpen) return null;
 
   const elapsedMs = snapshot?.elapsedMs ?? 0;
-  const progress = Math.max(0, Math.min(100, (elapsedMs / maxDurationMs) * 100));
+  const phaseDurationMs =
+    snapshot?.phase === 'immobility-watch' ? Math.max(maxDurationMs, 6000) : maxDurationMs;
+  const progress = Math.max(0, Math.min(100, (elapsedMs / phaseDurationMs) * 100));
   const confidence = Math.round((snapshot?.decision.confidence ?? 0) * 100);
   const classification = snapshot?.decision.classification ?? 'inconclusive';
 
@@ -50,7 +52,9 @@ export default function AIValidationModal({
           <div className="text-xs uppercase tracking-[0.25em] text-amber-300/90">AI Validation</div>
           <h2 className="mt-2 text-2xl font-semibold text-foreground">Unusual movement detected</h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            We are validating the motion pattern before opening the emergency SOS countdown.
+            {snapshot?.phase === 'immobility-watch'
+              ? 'We detected an impact and are checking for prolonged immobility.'
+              : 'We are validating the motion pattern before opening the emergency SOS countdown.'}
           </p>
         </div>
 
@@ -58,7 +62,7 @@ export default function AIValidationModal({
           <div>
             <div className="flex items-center justify-between text-sm text-muted-foreground mb-2">
               <span>Validation progress</span>
-              <span>{Math.ceil(Math.max(maxDurationMs - elapsedMs, 0) / 1000)}s</span>
+              <span>{Math.ceil(Math.max(phaseDurationMs - elapsedMs, 0) / 1000)}s</span>
             </div>
             <div className="h-2 rounded-full bg-secondary/50 overflow-hidden">
               <div
