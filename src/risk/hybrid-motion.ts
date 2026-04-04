@@ -82,11 +82,11 @@ export const DEFAULT_HYBRID_MOTION_CONFIG: HybridMotionConfig = {
   highMotionThreshold: 0.45,
   dropAverageThreshold: 0.12,
   runningVarianceThreshold: 0.01,
-  abnormalAverageThreshold: 0.16,
-  abnormalVarianceThreshold: 0.018,
-  abnormalMaxThreshold: 0.32,
-  abnormalSpikeCountThreshold: 2,
-  earlyConfirmConfidence: 0.72,
+  abnormalAverageThreshold: 0.21,
+  abnormalVarianceThreshold: 0.03,
+  abnormalMaxThreshold: 0.42,
+  abnormalSpikeCountThreshold: 3,
+  earlyConfirmConfidence: 0.84,
   earlyRejectConfidence: 0.82,
 };
 
@@ -249,23 +249,28 @@ export function classifyMotionWindow(
   const spikeScore = clamp(features.spikeCount / Math.max(config.abnormalSpikeCountThreshold, 1));
   const rangeScore = clamp(features.range / Math.max(config.highMotionThreshold, 0.001));
   const abnormalConfidence = clamp(
-    varianceScore * 0.3 +
-      averageScore * 0.2 +
-      maxScore * 0.2 +
-      spikeScore * 0.15 +
-      rangeScore * 0.15
+    varianceScore * 0.34 +
+      averageScore * 0.14 +
+      maxScore * 0.12 +
+      spikeScore * 0.2 +
+      rangeScore * 0.2
   );
 
+  const hasIrregularVariance = features.variance >= config.abnormalVarianceThreshold;
+  const hasIrregularRange = features.range >= config.sustainedTriggerThreshold;
+  const hasRepeatedBursts = features.spikeCount >= config.abnormalSpikeCountThreshold;
+  const hasElevatedMotion = features.average >= config.abnormalAverageThreshold || features.max >= config.abnormalMaxThreshold;
+
   if (
-    features.variance >= config.abnormalVarianceThreshold ||
-    (features.max >= config.abnormalMaxThreshold && features.spikeCount >= config.abnormalSpikeCountThreshold) ||
-    (features.average >= config.abnormalAverageThreshold && features.range >= config.sustainedTriggerThreshold)
+    (hasIrregularVariance && hasIrregularRange && hasRepeatedBursts) ||
+    (hasIrregularVariance && hasElevatedMotion && hasRepeatedBursts) ||
+    (hasIrregularRange && hasElevatedMotion && hasRepeatedBursts && features.lowMotionRatio < 0.55)
   ) {
     return {
       classification: 'abnormal',
       validatedDanger: true,
       confidence: round(abnormalConfidence),
-      reason: 'abnormal motion confirmed: high variance and irregular movement detected',
+      reason: 'abnormal motion confirmed: irregular non-uniform movement persisted across validation',
       shouldEarlyConfirm: abnormalConfidence >= config.earlyConfirmConfidence,
       shouldEarlyReject: false,
     };
